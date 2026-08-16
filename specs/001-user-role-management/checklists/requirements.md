@@ -31,4 +31,4 @@
 
 ## Notes
 
-All checklist items pass. Spec is ready for `/speckit-clarify` or `/speckit-plan`.
+All 16 items pass. Spec is ready for `/speckit-plan`.
