@@ -31,5 +31,7 @@
 
 ## Notes
 
-- All items resolved. Archiving confirmed as reversible (Option A): admins can reactivate archived projects; FR-012, FR-013, SC-007, and User Story 4 updated accordingly.
-- Ready to proceed to `/speckit-clarify` or `/speckit-plan`
+- All items resolved. Archiving confirmed as reversible: admins can reactivate archived projects; FR-013, FR-014, SC-007, and User Story 4 updated accordingly.
+- Updated 2026-08-16: Added project dates (start/end date) to project entity and functional requirements (FR-002).
+- Updated 2026-08-16: Replaced "specs" with "resources" (text and links); added FR-003 defining resource structure; added SC-008 for resource creation.
+- All items pass — ready to proceed to `/speckit-clarify` or `/speckit-plan`.
