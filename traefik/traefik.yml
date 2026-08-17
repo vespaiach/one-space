@@ -1,0 +1,29 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+api:
+  dashboard: false
+
+log:
+  level: INFO
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: proxy
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: nta.toan@gmail.com
+      storage: /acme.json
+      httpChallenge:
+        entryPoint: web
