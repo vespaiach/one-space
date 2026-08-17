@@ -31,4 +31,4 @@
 
 ## Notes
 
-All 16 items pass. Spec is ready for `/speckit-plan`.
+All items pass. Spec updated 2026-08-17 to adopt stateless invitation links: removed server-side invitation state (FR-008 deleted), revocation support, and duplicate-invitation check. Validity at registration time is now defined as: link not expired AND email not yet registered.

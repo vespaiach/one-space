@@ -8,8 +8,9 @@
 |--------|-----------------|---------|
 | User Account + Profile | `users` | Combined account credentials and profile fields; one record per user |
 | Session | `sessions` | Opaque session tokens for authenticated users; DB-backed for revocability |
-| Invitation | `invitations` | Tracks invitation status; paired with an encrypted token sent via email |
 | Password Reset Token | `password_reset_tokens` | Single-use reset tokens for self-service password recovery |
+
+> **No `invitations` table**: Invitation links are stateless AES-256-GCM tokens carrying `{ email, expiresAt, purpose }`. Validity is assessed at registration time by decrypting the token, checking expiry, and confirming the email is not yet registered. No server-side invitation state is stored or revoked.
 
 ---
 
@@ -17,30 +18,35 @@
 
 Stores account credentials and profile data in a single record. Role is system-assigned. Status controls login access. Lockout state (`failed_login_attempts`, `locked_until`) governs brute-force protection.
 
-```sql
-CREATE TABLE users (
-  id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  email                 VARCHAR(255) NOT NULL UNIQUE,
-  password_hash         TEXT        NOT NULL,
-  role                  TEXT        NOT NULL DEFAULT 'member'
-                          CHECK (role IN ('admin', 'member')),
-  status                TEXT        NOT NULL DEFAULT 'active'
-                          CHECK (status IN ('active', 'suspended')),
-  first_name            VARCHAR(100) NOT NULL,
-  last_name             VARCHAR(100) NOT NULL,
-  phone_number          VARCHAR(50),
-  slack_handle          VARCHAR(100),
-  avatar_path           TEXT,
-  force_password_reset  BOOLEAN     NOT NULL DEFAULT FALSE,
-  failed_login_attempts INT         NOT NULL DEFAULT 0,
-  locked_until          TIMESTAMPTZ,
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+**File**: `lib/db/schema/users.ts`
 
-CREATE INDEX idx_users_email  ON users(email);
-CREATE INDEX idx_users_role   ON users(role);
-CREATE INDEX idx_users_status ON users(status);
+```typescript
+import { boolean, index, integer, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: varchar('email', { length: 255 }).notNull().unique(),
+  passwordHash: text('password_hash').notNull(),
+  role: text('role', { enum: ['admin', 'member'] }).notNull().default('member'),
+  status: text('status', { enum: ['active', 'suspended'] }).notNull().default('active'),
+  firstName: varchar('first_name', { length: 100 }).notNull(),
+  lastName: varchar('last_name', { length: 100 }).notNull(),
+  phoneNumber: varchar('phone_number', { length: 50 }),
+  slackHandle: varchar('slack_handle', { length: 100 }),
+  avatarPath: text('avatar_path'),
+  forcePasswordReset: boolean('force_password_reset').notNull().default(false),
+  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_users_email').on(table.email),
+  index('idx_users_role').on(table.role),
+  index('idx_users_status').on(table.status),
+])
+
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
 ```
 
 **Field notes**:
@@ -79,19 +85,26 @@ failed_login_attempts: increments on failure; resets to 0 on success
 
 One row per active authenticated session. Sessions are identified by an opaque random token stored in the browser cookie. Expired and revoked rows are retained until pruned; queries always filter on `is_revoked = FALSE AND expires_at > NOW()`.
 
-```sql
-CREATE TABLE sessions (
-  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  session_token TEXT        NOT NULL UNIQUE,
-  user_id       UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at    TIMESTAMPTZ NOT NULL,
-  is_revoked    BOOLEAN     NOT NULL DEFAULT FALSE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+**File**: `lib/db/schema/sessions.ts`
 
-CREATE INDEX idx_sessions_session_token ON sessions(session_token);
-CREATE INDEX idx_sessions_user_id       ON sessions(user_id);
-CREATE INDEX idx_sessions_expires_at    ON sessions(expires_at);
+```typescript
+import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { users } from './users'
+
+export const sessions = pgTable('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  sessionToken: text('session_token').notNull().unique(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  isRevoked: boolean('is_revoked').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_sessions_session_token').on(table.sessionToken),
+  index('idx_sessions_user_id').on(table.userId),
+  index('idx_sessions_expires_at').on(table.expiresAt),
+])
+
+export type Session = typeof sessions.$inferSelect
 ```
 
 **Field notes**:
@@ -110,62 +123,22 @@ CREATE INDEX idx_sessions_expires_at    ON sessions(expires_at);
 | Remember Me | `NOW() + INTERVAL '21 days'` | `REMEMBER_ME_DURATION_SECONDS=1814400` |
 
 **Validation query** (called in `getSession()` — never in middleware):
-```sql
-SELECT s.id, s.expires_at, u.*
-FROM sessions s
-JOIN users u ON u.id = s.user_id
-WHERE s.session_token = $1
-  AND s.is_revoked = FALSE
-  AND s.expires_at > NOW();
+```typescript
+await db
+  .select()
+  .from(sessions)
+  .innerJoin(users, eq(sessions.userId, users.id))
+  .where(
+    and(
+      eq(sessions.sessionToken, token),
+      eq(sessions.isRevoked, false),
+      gt(sessions.expiresAt, new Date()),
+    ),
+  )
+  .limit(1)
 ```
 
 **Cleanup**: Expired rows accumulate; a scheduled `DELETE FROM sessions WHERE expires_at < NOW()` can prune them. Not operationally critical at ~20-user scale — lazy cleanup on first failed lookup is acceptable.
-
----
-
-## `invitations` Table
-
-One row per invitation email sent. The encrypted token (containing email + expiry) lives only in the email link; the DB record tracks status for duplicate-prevention and revocation.
-
-```sql
-CREATE TABLE invitations (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  email       VARCHAR(255) NOT NULL,
-  invited_by  UUID        REFERENCES users(id) ON DELETE SET NULL,
-  token_hash  VARCHAR(64) NOT NULL UNIQUE,
-  status      TEXT        NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending', 'accepted', 'revoked')),
-  expires_at  TIMESTAMPTZ NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Ensures only one pending invitation per email at a time (FR-008)
-CREATE UNIQUE INDEX idx_invitations_pending_email
-  ON invitations(email)
-  WHERE status = 'pending';
-
-CREATE INDEX idx_invitations_token_hash ON invitations(token_hash);
-CREATE INDEX idx_invitations_email      ON invitations(email);
-CREATE INDEX idx_invitations_status     ON invitations(status);
-```
-
-**Field notes**:
-
-| Field | Details |
-|-------|---------|
-| `invited_by` | Nullable (`ON DELETE SET NULL`) — if the inviting Admin is deleted, the invitation remains valid (spec edge case) |
-| `token_hash` | `SHA-256(encrypted_token)` in hex — used to look up this record when the link is followed |
-| `expires_at` | Denormalized from the token payload for DB-level expiry queries; set from `INVITATION_EXPIRY_DAYS` env var |
-| `status` | `'pending'` → `'accepted'` (on successful registration) or `'revoked'` (if Admin cancels) |
-
-**Duplicate-invitation logic** (FR-007, FR-008): Before inserting a new invitation, the application checks whether the email already has an active user account (FR-007) or an existing `status = 'pending'` invitation (FR-008). The partial unique index on `invitations(email) WHERE status = 'pending'` provides a DB-level backstop.
-
-**State transitions**:
-```
-pending → accepted   (on successful registration with this token)
-pending → revoked    (Admin revokes, or future cancellation flow)
-```
-Expired invitations are not updated in the DB — expiry is evaluated at use time by checking both `expires_at` and the embedded `expiresAt` in the decrypted token. `status` remains `'pending'` but the token is invalid.
 
 ---
 
@@ -173,18 +146,25 @@ Expired invitations are not updated in the DB — expiry is evaluated at use tim
 
 One row per issued reset link. Only the most recently issued token per user is active; prior tokens are invalidated atomically when a new one is issued.
 
-```sql
-CREATE TABLE password_reset_tokens (
-  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_hash VARCHAR(64) NOT NULL UNIQUE,
-  expires_at TIMESTAMPTZ NOT NULL,
-  used       BOOLEAN     NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+**File**: `lib/db/schema/passwordResetTokens.ts`
 
-CREATE INDEX idx_prt_user_id    ON password_reset_tokens(user_id);
-CREATE INDEX idx_prt_token_hash ON password_reset_tokens(token_hash);
+```typescript
+import { boolean, index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { users } from './users'
+
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  used: boolean('used').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('idx_prt_user_id').on(table.userId),
+  index('idx_prt_token_hash').on(table.tokenHash),
+])
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect
 ```
 
 **Field notes**:
@@ -194,20 +174,30 @@ CREATE INDEX idx_prt_token_hash ON password_reset_tokens(token_hash);
 | `token_hash` | `SHA-256(encrypted_token)` in hex — same pattern as `invitations.token_hash` |
 | `used` | Set TRUE after successful password update; prevents reuse of the same link |
 
-**Invalidation on new issuance** (FR-022): When a new reset token is issued, run this before the `INSERT`:
-```sql
-UPDATE password_reset_tokens
-SET used = TRUE
-WHERE user_id = $1 AND used = FALSE;
+**Invalidation on new issuance** (FR-022): When a new reset token is issued, run both statements in a single Drizzle transaction:
+```typescript
+await db.transaction(async (tx) => {
+  await tx
+    .update(passwordResetTokens)
+    .set({ used: true })
+    .where(and(eq(passwordResetTokens.userId, userId), eq(passwordResetTokens.used, false)))
+  await tx.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt })
+})
 ```
-Then insert the new row. Both statements run in a single transaction.
 
 **Validation query at reset time**:
-```sql
-SELECT * FROM password_reset_tokens
-WHERE token_hash = $1
-  AND used = FALSE
-  AND expires_at > NOW();
+```typescript
+await db
+  .select()
+  .from(passwordResetTokens)
+  .where(
+    and(
+      eq(passwordResetTokens.tokenHash, tokenHash),
+      eq(passwordResetTokens.used, false),
+      gt(passwordResetTokens.expiresAt, new Date()),
+    ),
+  )
+  .limit(1)
 ```
 
 **Reset token expiry**: Configurable via `PASSWORD_RESET_EXPIRY_MINUTES` env var (suggested default: 60 minutes — not specified in the original spec but standard practice).
@@ -219,11 +209,9 @@ WHERE token_hash = $1
 | Rule | Where Enforced |
 |------|---------------|
 | At least one active Admin must exist | Application layer (server action pre-check before delete/suspend) |
-| One pending invitation per email | Partial unique index + application pre-check |
-| No invitation for email with existing account | Application pre-check before invitation INSERT |
+| No invitation for email with existing account | Application pre-check in `sendInvitation` before token generation |
 | Sessions cascade on user delete | `ON DELETE CASCADE` on `sessions.user_id` |
 | Reset tokens cascade on user delete | `ON DELETE CASCADE` on `password_reset_tokens.user_id` |
-| Invitation invited_by nullified on Admin delete | `ON DELETE SET NULL` on `invitations.invited_by` |
 | Suspended account check before lockout increment | Application logic (login server action) |
 | Role field is read-only via profile edit | Application layer (server action ignores role field in profile update) |
 
@@ -233,19 +221,19 @@ WHERE token_hash = $1
 
 | Env Var | Default | Used In |
 |---------|---------|---------|
-| `DATABASE_URL` | — (required) | `src/lib/db/client.ts` |
-| `DATABASE_URL_TEST` | — (test only) | `src/lib/db/client.ts` |
-| `SESSION_DURATION_SECONDS` | `7200` | `src/lib/auth/session.ts` |
-| `REMEMBER_ME_DURATION_SECONDS` | `1814400` | `src/lib/auth/session.ts` |
-| `INVITATION_SECRET_KEY` | — (required, 64 hex chars = 32 bytes) | `src/lib/crypto/token.ts` |
-| `INVITATION_EXPIRY_DAYS` | `7` | `src/app/actions/invitations.ts` |
-| `PASSWORD_RESET_EXPIRY_MINUTES` | `60` | `src/app/actions/password.ts` |
-| `LOGIN_MAX_ATTEMPTS` | `5` | `src/app/actions/auth.ts` |
-| `LOGIN_LOCKOUT_SECONDS` | `900` | `src/app/actions/auth.ts` |
-| `SMTP_HOST` | — (required) | `src/lib/email/sender.ts` |
-| `SMTP_PORT` | `587` | `src/lib/email/sender.ts` |
-| `SMTP_USER` | — (required) | `src/lib/email/sender.ts` |
-| `SMTP_PASS` | — (required) | `src/lib/email/sender.ts` |
-| `SMTP_FROM` | — (required) | `src/lib/email/sender.ts` |
+| `DATABASE_URL` | — (required) | `lib/db/index.ts` |
+| `DATABASE_URL_TEST` | — (test only) | `lib/db/index.ts` |
+| `SESSION_DURATION_SECONDS` | `7200` | `lib/auth/session.ts` |
+| `REMEMBER_ME_DURATION_SECONDS` | `1814400` | `lib/auth/session.ts` |
+| `INVITATION_SECRET_KEY` | — (required, 64 hex chars = 32 bytes) | `lib/crypto/token.ts` |
+| `INVITATION_EXPIRY_DAYS` | `7` | `app/actions/invitations.ts` |
+| `PASSWORD_RESET_EXPIRY_MINUTES` | `60` | `app/actions/password.ts` |
+| `LOGIN_MAX_ATTEMPTS` | `5` | `app/actions/auth.ts` |
+| `LOGIN_LOCKOUT_SECONDS` | `900` | `app/actions/auth.ts` |
+| `SMTP_HOST` | — (required) | `lib/email/sender.ts` |
+| `SMTP_PORT` | `587` | `lib/email/sender.ts` |
+| `SMTP_USER` | — (required) | `lib/email/sender.ts` |
+| `SMTP_PASS` | — (required) | `lib/email/sender.ts` |
+| `SMTP_FROM` | — (required) | `lib/email/sender.ts` |
 | `INITIAL_ADMIN_EMAIL` | — (required at boot) | Bootstrap / seed script |
 | `INITIAL_ADMIN_PASSWORD` | — (required at boot) | Bootstrap / seed script |

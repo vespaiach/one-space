@@ -8,7 +8,7 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 
 ---
 
-## `src/app/actions/auth.ts`
+## `app/actions/auth.ts`
 
 ### `login(formData: FormData)`
 
@@ -47,7 +47,7 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 
 ---
 
-## `src/app/actions/auth.ts` — Registration
+## `app/actions/auth.ts` — Registration
 
 ### `register(formData: FormData)`
 
@@ -57,21 +57,19 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 1. Token decrypts without error (AES-256-GCM authTag check)
 2. Token `expiresAt > now`
 3. Token `purpose === 'invitation'`
-4. Invitation record exists by `token_hash` with `status = 'pending'`
-5. No user account exists with the invitation's email (race-condition guard)
-6. `password === confirmPassword`
-7. Password meets complexity requirements (length, uppercase, lowercase, digit, special char)
+4. No user account exists with the invitation's email (race-condition guard)
+5. `password === confirmPassword`
+6. Password meets complexity requirements (length, uppercase, lowercase, digit, special char)
 
 **Mutations** (single transaction):
 - Hash password with `crypto.scrypt`
 - `INSERT INTO users (email, password_hash, role, status, first_name, last_name)` with `role='member'`, `status='active'`
-- `UPDATE invitations SET status = 'accepted' WHERE token_hash = <hash>`
 
 **On success**: Redirect to `/login` with query param `?registered=true` (triggers a success message on the login page)
 
 ---
 
-## `src/app/actions/password.ts`
+## `app/actions/password.ts`
 
 ### `requestPasswordReset(formData: FormData)`
 
@@ -111,7 +109,7 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 
 ---
 
-## `src/app/actions/invitations.ts`
+## `app/actions/invitations.ts`
 
 ### `sendInvitation(formData: FormData)`
 
@@ -122,18 +120,18 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 2. Caller's role is `'admin'`; if not → throw `Forbidden`
 3. Email format is valid
 4. No active user account with this email (FR-007)
-5. No `status = 'pending'` invitation for this email (FR-008)
 
 **Mutations**:
 - Generate encrypted invitation token: `{ email, expiresAt, purpose: 'invitation' }`
-- `INSERT INTO invitations (email, invited_by, token_hash, expires_at)`
 - Send invitation email via `sendInvitationEmail(email, token)`
+
+> No invitation record is inserted into the database. The token is self-contained; validity is assessed entirely at registration time.
 
 **On success**: Return success message "Invitation sent to [email]"
 
 ---
 
-## `src/app/actions/users.ts`
+## `app/actions/users.ts`
 
 ### `updateProfile(formData: FormData)`
 
@@ -232,7 +230,7 @@ Each entry documents a Next.js Server Action: its file location, inputs, the pre
 
 ---
 
-## `src/app/api/avatar/route.ts` (Route Handler, not Server Action)
+## `app/api/avatar/route.ts` (Route Handler, not Server Action)
 
 ### `POST /api/avatar`
 

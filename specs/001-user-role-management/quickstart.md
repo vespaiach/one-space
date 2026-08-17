@@ -22,7 +22,11 @@ This guide describes runnable validation scenarios that prove the feature works 
    INITIAL_ADMIN_EMAIL=admin@example.com
    INITIAL_ADMIN_PASSWORD=Admin1234!
    ```
-4. Database schema applied (migrations run)
+4. Database schema applied:
+   ```bash
+   npm run db:generate   # generate migration files from Drizzle schema
+   npm run db:migrate    # apply migrations to DATABASE_URL
+   ```
 5. Initial Admin seeded (run bootstrap/seed script)
 6. App running: `npm run dev` (or `npm run build && npm start`)
 
@@ -57,7 +61,7 @@ This guide describes runnable validation scenarios that prove the feature works 
 1. Log in as Admin (Scenario 1)
 2. Navigate to `http://localhost:3000/admin/invitations`
 3. Enter `member@example.com`, submit "Send Invitation"
-4. Confirm: success message shown; invitation row in DB has `status='pending'`
+4. Confirm: success message shown
 5. Check email inbox (Mailpit UI at `http://localhost:8025` or equivalent)
 6. Open the invitation email; click the registration link
 7. Confirm: `http://localhost:3000/register?token=<encrypted-token>` loads; email is pre-filled (read-only)
@@ -68,29 +72,29 @@ This guide describes runnable validation scenarios that prove the feature works 
 - Redirected to `/login?registered=true`
 - Login page shows a success message
 - DB: new row in `users` with `role='member'`, `status='active'`
-- DB: invitation row now has `status='accepted'`
 
 **Log in as the new member**: Use `member@example.com` / `Member1234!`. Confirm redirect to `/users`.
 
 ---
 
-## Scenario 3 — Duplicate / Expired Invitation (US1 edge cases)
+## Scenario 3 — Invalid Invitation Links (US1 edge cases)
 
 **Goal**: Confirm invalid invitation links are rejected.
 
-**3a — Duplicate invitation**:
-1. As Admin, attempt to send a second invitation to `member@example.com` (already registered)
+**3a — Email already registered**:
+1. As Admin, attempt to send an invitation to `member@example.com` (already registered)
 2. Expected: error "This email address already has an account"
 
-**3b — Duplicate pending invitation**:
-1. Invite a new email `pending@example.com`
-2. Attempt to invite the same email again before they register
-3. Expected: error "An invitation for this email address is already pending"
-
-**3c — Expired token**:
+**3b — Expired token**:
 1. Set `INVITATION_EXPIRY_DAYS=0` temporarily and send an invitation
 2. Follow the link immediately
 3. Expected: page shows "This invitation link is invalid or has expired"
+
+**3c — Email registered between invite and registration** (race condition):
+1. Invite `race@example.com`
+2. Before following the link, manually insert a user row with `email = 'race@example.com'` in the DB
+3. Follow the invitation link and attempt to register
+4. Expected: registration is rejected with "This invitation link is invalid or has expired" (email already in use)
 
 ---
 
@@ -226,14 +230,17 @@ This guide describes runnable validation scenarios that prove the feature works 
 ## Running Automated Tests
 
 ```bash
-# Unit tests (no DB required)
-npm test -- --testPathPattern=tests/unit
-
-# Integration tests (requires DATABASE_URL_TEST pointing to a test DB)
-DATABASE_URL_TEST=postgres://... npm test -- --testPathPattern=tests/integration
-
 # All tests
 npm test
+
+# Unit tests only (no DB required)
+npm test -- tests/unit
+
+# Integration tests (requires DATABASE_URL_TEST pointing to a test DB)
+DATABASE_URL_TEST=postgres://... npm test -- tests/integration
+
+# Run with verbose output
+npm test -- --reporter=verbose
 ```
 
 Integration tests truncate all tables between test suites. They do not use mocks for the database layer.

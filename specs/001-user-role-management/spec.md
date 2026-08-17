@@ -21,9 +21,9 @@ A new person cannot self-register. An Admin sends them an invitation email. The 
 **Acceptance Scenarios**:
 
 1. **Given** a logged-in Admin, **When** the Admin submits a valid email address to invite a user, **Then** an invitation email is sent to that address containing a unique, time-limited registration link.
-2. **Given** a valid, unexpired invitation link, **When** the invitee opens the link and submits their First Name, Last Name, and chosen password in a single registration form, **Then** a new account is created with the Member role and the invitation is marked as accepted.
+2. **Given** a valid, unexpired invitation link for an email address not yet registered, **When** the invitee opens the link and submits their First Name, Last Name, and chosen password in a single registration form, **Then** a new account is created with the Member role and the invitee can immediately log in.
 3. **Given** an expired invitation link, **When** the invitee opens the link, **Then** the system informs them the link has expired and no account is created.
-4. **Given** an already-accepted invitation link, **When** someone attempts to use it again, **Then** the system rejects the request and no duplicate account is created.
+4. **Given** a valid invitation link where the invited email address is already registered, **When** someone attempts to use the link to register, **Then** the system rejects the request because the email address is already in use and no duplicate account is created.
 5. **Given** an unauthenticated user, **When** they attempt to access the registration page without a valid invitation link, **Then** they are denied and cannot create an account.
 
 ---
@@ -155,7 +155,6 @@ A logged-in user can upload a profile picture to personalise their account, repl
 - What if an Admin attempts to delete or suspend the only remaining Admin account? The system must prevent this to ensure at least one Admin always exists.
 - What happens to pending invitations sent by an Admin whose account is deleted? Pending invitations remain valid until they expire or are accepted.
 - What if an Admin tries to invite an email address that already has an account? The system rejects the invitation with a clear message.
-- What if an Admin tries to invite an email address that already has a pending invitation? The system rejects the duplicate invitation.
 - What if the invitee submits a password that does not meet the required strength criteria? The registration form rejects the submission and prompts them to choose a stronger password before the account is created.
 - What if a user requests multiple password resets in quick succession? Only the most recently issued reset link is valid; prior links are invalidated.
 - What if a suspended user successfully resets their password? Their password is updated but the account remains suspended; they cannot log in until an Admin reinstates them.
@@ -171,14 +170,13 @@ A logged-in user can upload a profile picture to personalise their account, repl
 
 - **FR-001**: The system MUST support exactly two user roles: Admin and Member.
 - **FR-002**: The system MUST allow a single initial Admin account to be configured at deployment time without requiring an invitation.
-- **FR-003**: Admins MUST be able to send an invitation email to any email address not already associated with an account or pending invitation.
+- **FR-003**: Admins MUST be able to send an invitation email to any email address not already associated with an account.
 - **FR-004**: New users MUST only be able to register by following a valid, unexpired invitation link; self-registration without an invitation MUST be rejected.
 - **FR-004a**: The invitation registration form MUST collect the invitee's First Name, Last Name, and chosen password in a single step; no temporary password or secondary email is issued. Avatar, Phone Number, and Slack Handle are not required at registration and may be set later via profile editing.
 - **FR-004b**: The system MUST enforce minimum password strength requirements and reject registration if the chosen password does not meet them, with a specific error message.
 - **FR-005**: All newly registered users MUST be automatically assigned the Member role upon completing registration.
-- **FR-006**: The system MUST reject registration attempts using an expired or already-accepted invitation link.
+- **FR-006**: The system MUST reject registration attempts where the invitation link has expired or the invited email address is already registered.
 - **FR-007**: The system MUST reject invitation attempts for email addresses that already have an active account.
-- **FR-008**: The system MUST reject duplicate invitations for email addresses that already have a pending invitation.
 - **FR-009**: Any logged-in user (Admin or Member) MUST be able to view the profile of any other user in the system, regardless of role.
 - **FR-010**: Any logged-in user MUST be able to edit and save changes to their own personal profile.
 - **FR-011**: The system MUST prevent users from editing another user's profile through the self-edit interface.
@@ -211,7 +209,7 @@ A logged-in user can upload a profile picture to personalise their account, repl
 
 - **User Account**: Represents a registered user; has a role (Admin or Member), an email address, a status (active, suspended), a password-reset-required flag, and a creation timestamp.
 - **User Profile**: The personal details associated with a User Account. Fields: First Name (required), Last Name (required), Role (read-only, system-assigned Admin or Member), Avatar (optional profile picture linked to the user's account; absent by default), Phone Number (optional), Slack Handle (optional); owned by one User Account.
-- **Invitation**: A time-limited, single-use token sent to an email address; records the inviting Admin, recipient email, creation date, expiry date, and status (pending, accepted, expired, revoked).
+- **Invitation Link**: A time-limited token embedded in a registration URL; contains the recipient's email address and an expiry timestamp. Validity is assessed at registration time by verifying the link has not expired and the email address is not yet registered. No server-side state is stored for invitations.
 
 ## Success Criteria *(mandatory)*
 
@@ -227,6 +225,9 @@ A logged-in user can upload a profile picture to personalise their account, repl
 ## Assumptions
 
 - Invitation links expire after 7 days (standard industry practice for email invitations).
+- Invitation links are stateless and require no server-side storage; an invitation is valid as long as it has not expired and the recipient's email address is not yet registered.
+- Multiple invitation links may be sent to the same unregistered email address; no duplicate-invitation check is enforced since no pending-invitation state is tracked.
+- Invitation links cannot be revoked; expiry and email-already-registered are the only invalidation conditions.
 - Admins cannot demote other Admins back to Member; role promotion is one-way in this version.
 - Admins cannot edit, suspend, or delete other Admin accounts; Admin management actions apply to Members only.
 - A deleted Member account and all associated profile data are permanently removed with no soft-delete or recovery mechanism.
@@ -238,6 +239,12 @@ A logged-in user can upload a profile picture to personalise their account, repl
 - Temporary login lockout triggers after 5 consecutive failed attempts and lifts automatically after 15 minutes (standard defaults; adjustable at deployment time).
 
 ## Clarifications
+
+### Session 2026-08-17
+
+- Q: Must invitation records be stored server-side? → A: No. Invitations are stateless tokens; validity is checked at registration time against expiry and email availability only. No server-side invitation state is persisted.
+- Q: Can an Admin send multiple invitations to the same unregistered email? → A: Yes. Since no invitation state is tracked, the only pre-send constraint is that the email must not already have an active account.
+- Q: Can an invitation be revoked after it is sent? → A: No. Revocation is not supported; an invitation link remains usable until it expires or the email address becomes registered.
 
 ### Session 2026-08-16
 

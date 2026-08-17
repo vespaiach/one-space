@@ -10,7 +10,7 @@ Each entry defines a page route, its access requirements, the data it displays, 
 
 ### `GET /login`
 
-**File**: `src/app/(auth)/login/page.tsx`
+**File**: `app/(auth)/login/page.tsx`
 
 **Access**: Unauthenticated only. Redirect authenticated users to `/users`.
 
@@ -27,13 +27,13 @@ Each entry defines a page route, its access requirements, the data it displays, 
 
 ### `GET /register?token=<encrypted-token>`
 
-**File**: `src/app/(auth)/register/page.tsx`
+**File**: `app/(auth)/register/page.tsx`
 
 **Access**: Public. No session required.
 
 **On page load**:
 1. Extract `token` from URL query params
-2. Decrypt and validate token server-side: if invalid, expired, or invitation is not `pending` → render error state with message "This invitation link is invalid or has expired."
+2. Decrypt and validate token server-side: if invalid, expired, or the email is already registered → render error state with message "This invitation link is invalid or has expired."
 3. If valid: render registration form with email pre-filled (read-only) from the decrypted token
 
 **Displays** (valid token path):
@@ -50,7 +50,7 @@ Each entry defines a page route, its access requirements, the data it displays, 
 
 ### `GET /reset-password`
 
-**File**: `src/app/(auth)/reset-password/page.tsx`
+**File**: `app/(auth)/reset-password/page.tsx`
 
 **Access**: Public.
 
@@ -70,13 +70,13 @@ Each entry defines a page route, its access requirements, the data it displays, 
 
 ## Protected Routes — Valid session required
 
-All routes below: middleware checks for session cookie; `getSession()` in the Server Component performs DB validation. No session → redirect to `/login`.
+All routes below: `proxy.ts` checks for session cookie; `getSession()` in the Server Component performs DB validation. No session → redirect to `/login`.
 
 ---
 
 ### `GET /users`
 
-**File**: `src/app/(shell)/users/page.tsx`
+**File**: `app/(shell)/users/page.tsx`
 
 **Access**: Any authenticated user (Admin or Member).
 
@@ -93,7 +93,7 @@ All routes below: middleware checks for session cookie; `getSession()` in the Se
 
 ### `GET /users/[id]`
 
-**File**: `src/app/(shell)/users/[id]/page.tsx`
+**File**: `app/(shell)/users/[id]/page.tsx`
 
 **Access**: Any authenticated user.
 
@@ -116,7 +116,7 @@ All routes below: middleware checks for session cookie; `getSession()` in the Se
 
 ### `GET /users/[id]/edit`
 
-**File**: `src/app/(shell)/users/[id]/edit/page.tsx`
+**File**: `app/(shell)/users/[id]/edit/page.tsx`
 
 **Access**:
 - A user can only access their own profile edit page, unless they are an Admin
@@ -139,7 +139,7 @@ All routes below: middleware checks for session cookie; `getSession()` in the Se
 
 ### `GET /admin/invitations`
 
-**File**: `src/app/(shell)/admin/invitations/page.tsx`
+**File**: `app/(shell)/admin/invitations/page.tsx`
 
 **Access**: Admin only. Non-admin → redirect to `/users` with an error.
 
@@ -147,7 +147,7 @@ All routes below: middleware checks for session cookie; `getSession()` in the Se
 - Email field
 - "Send Invitation" button
 
-**On submit**: Calls `sendInvitation` server action. On success: show confirmation. On failure: show specific error (email already has account, pending invitation already exists, invalid email format).
+**On submit**: Calls `sendInvitation` server action. On success: show confirmation. On failure: show specific error (email already has account, invalid email format).
 
 ---
 
@@ -155,4 +155,4 @@ All routes below: middleware checks for session cookie; `getSession()` in the Se
 
 **Not a standalone page** — implemented as a redirect in `getSession()`. If the resolved user has `force_password_reset = TRUE`, all protected routes redirect to `/reset-password` (State 2 — but driven by session context, not a URL token, using a special server-session-based flow).
 
-**Note to implementers**: The forced reset flow uses the existing session (the user is authenticated) but must still require a new password before granting full access. The implementation should use a middleware/guard check that intercepts all `(shell)` routes when `force_password_reset = TRUE` and redirects to a dedicated `/change-password` page (not a token-based URL). This requires a separate page not covered by the token-based reset flow. Document as a separate implementation concern in `tasks.md`.
+**Note to implementers**: The forced reset flow uses the existing session (the user is authenticated) but must still require a new password before granting full access. The implementation should use a `requireSession()` guard check that intercepts all `(shell)` routes when `force_password_reset = TRUE` and redirects to a dedicated `/change-password` page (not a token-based URL). This requires a separate page not covered by the token-based reset flow. Document as a separate implementation concern in `tasks.md`.

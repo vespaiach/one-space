@@ -21,16 +21,34 @@
 | Standard | `SESSION_DURATION_SECONDS` | 7200 (2 hours) |
 | Remember Me | `REMEMBER_ME_DURATION_SECONDS` | 1814400 (21 days) |
 
-**Middleware split** (critical pattern for Next.js App Router):
-- `middleware.ts` runs in the Edge runtime — **cannot use `pg`**
-- Middleware role: cookie existence check only → redirect to `/login` if no session cookie; does not validate with DB
-- Full DB session validation: happens inside `getSession()` called at the top of every protected Server Component and Server Action
-- This is the standard Next.js App Router auth pattern; the middleware is the first-pass guard, not the authoritative validator
+**Proxy split** (critical pattern for Next.js 16 App Router):
+- `proxy.ts` replaces `middleware.ts` in Next.js 16; the exported function is `proxy()` (not `middleware()`)
+- Next.js 16 default runtime for Proxy is **Node.js** (no longer Edge); Proxy _can_ use `postgres`, Drizzle ORM, and all Node.js built-ins
+- **Architecture decision**: Proxy is still limited to cookie existence check → redirect to `/login` if absent; it does NOT perform DB validation
+  - Rationale: Next.js docs state Proxy "is _not_ intended for slow data fetching" and "should not be used as a full session management or authorization solution"
+  - Full DB session validation happens inside `getSession()` at the top of every protected Server Component and Server Action
+- Proxy is the first-pass guard, not the authoritative validator; `getSession()` is authoritative
 
-**pg Pool singleton** (HMR pitfall):
-- In development, Next.js HMR reloads modules and creates a new Pool on each reload, exhausting connections
-- Pattern: `globalThis.__pgPool ??= new Pool(config)` in `src/lib/db/client.ts` to reuse the pool across HMR cycles
-- In production, the module-level singleton is stable; the `globalThis` guard is no-op
+**Drizzle client singleton** (HMR pitfall):
+- In development, Next.js HMR reloads modules and creates a new Drizzle client on each reload, exhausting connections
+- Pattern already implemented in `lib/db/index.ts`: `globalForDb.db ?? drizzleDb` — reuses the Drizzle instance across HMR cycles
+- In production, the module-level singleton is stable; the `globalThis` guard is a no-op
+
+**Drizzle query for session validation** (called in `getSession()` — never in middleware):
+```typescript
+await db
+  .select()
+  .from(sessions)
+  .innerJoin(users, eq(sessions.userId, users.id))
+  .where(
+    and(
+      eq(sessions.sessionToken, token),
+      eq(sessions.isRevoked, false),
+      gt(sessions.expiresAt, new Date()),
+    ),
+  )
+  .limit(1)
+```
 
 **Alternatives considered**:
 - JWT (stateless): rejected — cannot revoke individual sessions without a denylist, which adds the same DB dependency with more complexity
@@ -40,7 +58,7 @@
 
 ## Invitation Token
 
-**Decision**: AES-256-GCM symmetric encryption using Node.js built-in `crypto`. Payload: `{ email, expiresAt }`.
+**Decision**: Stateless AES-256-GCM encrypted token using Node.js built-in `crypto`. Payload: `{ email, expiresAt, purpose: 'invitation' }`. No server-side invitation record is stored.
 
 **Token construction** (12-byte IV for GCM, 16-byte authTag):
 1. Generate 12-byte random IV: `crypto.randomBytes(12)`
@@ -49,21 +67,25 @@
 4. Concatenate `iv + ciphertext + authTag` → encode as `base64url` string
 5. Token is URL-safe, integrity-protected (AES-GCM authenticates ciphertext + IV)
 
-**DB storage**: Store `createHash('sha256').update(token).digest('hex')` as `token_hash` in the `invitations` table. This allows DB lookup of the invitation record (pending/accepted/revoked check) without decrypting the token on every request.
-
-**Verification flow**:
+**Verification flow** (at registration time — fully stateless):
 1. Receive token from URL query param
-2. Decrypt → extract `{ email, expiresAt }` — `decipher.final()` throws on tamper, rejecting forged tokens
-3. Check `expiresAt < now` (fail-fast before DB hit)
-4. Hash the token → look up `invitations` by `token_hash` → verify `status = 'pending'`
+2. Decrypt → extract `{ email, expiresAt, purpose }` — `decipher.final()` throws on tamper, rejecting forged tokens
+3. Check `purpose === 'invitation'`
+4. Check `expiresAt > now` (expired → reject)
+5. Check no user account exists with `email` (already registered → reject)
+6. Proceed with account creation
 
 **Token expiry**: `INVITATION_EXPIRY_DAYS` env var (default: 7 days per spec assumption).
 
-**Rationale**: Self-contained token (email embedded) as specified by user; DB-backed record for revocation and duplicate-prevention. AES-256-GCM provides both confidentiality and integrity with no additional HMAC step. Node.js built-in — no new package.
+**Pre-send check** (before generating the token): Admin-side `sendInvitation` action checks that no user account already exists for the supplied email before generating and emailing the token. This is the only server-side guard; no pending-invitation table is consulted.
+
+**Rationale**: Spec clarified (2026-08-17) that invitation state does not need to be persisted. Stateless tokens eliminate the `invitations` table entirely, removing revocation, duplicate-pending-check, and partial-index complexity. AES-256-GCM provides confidentiality and integrity with no additional HMAC step. Node.js built-in — no new package.
+
+**The `purpose` field** prevents cross-use of invitation tokens as password-reset tokens and vice versa.
 
 **Alternatives considered**:
 - HMAC-signed token: exposes email in the URL (signed but not encrypted), violating privacy expectation
-- Pure DB token (random UUID): does not carry email in the token as specified; simpler but doesn't meet the design requirement
+- DB-backed invitation record: was the prior design; removed per spec update — adds revocation and duplicate-prevention at the cost of an extra table and query on every registration attempt
 
 ---
 
@@ -96,7 +118,7 @@
 | Digit | ≥ 1 |
 | Special character | ≥ 1 (any printable non-alphanumeric) |
 
-**Validation**: Both client-side (UX feedback) and server-side (authoritative). Server-side validation implemented in `src/lib/validation/password.ts`. Error messages name which requirements are unmet.
+**Validation**: Both client-side (UX feedback) and server-side (authoritative). Server-side validation implemented in `lib/validation/password.ts`. Error messages name which requirements are unmet.
 
 **Rationale**: "Standard password complexity" as specified maps to OWASP ASVS Level 1 — the most widely recognized industry baseline for enterprise applications.
 
@@ -139,7 +161,7 @@
 
 ## Avatar File Upload
 
-**Decision**: Route Handler (`src/app/api/avatar/route.ts`), not a Server Action.
+**Decision**: Route Handler (`app/api/avatar/route.ts`), not a Server Action.
 
 **Why Route Handler**: Server Actions process `FormData` through Next.js's request pipeline with less control over size enforcement; a Route Handler exposes the raw `Request.formData()` API where the 5MB size check can be enforced before the file is written to disk.
 
@@ -165,14 +187,28 @@
 
 ## Testing Framework
 
-**Decision**: Jest with `next/jest` configuration.
+**Decision**: Vitest with `@vitejs/plugin-react`.
 
-| Test type | Jest environment | What it covers |
-|-----------|-----------------|----------------|
-| Unit | `jest-environment-node` | `src/lib/` modules (crypto, auth, validation, db queries in isolation) |
-| Unit | `jest-environment-jsdom` | React components (`src/components/`) |
-| Integration | `jest-environment-node` | Server actions + real PostgreSQL (`DATABASE_URL_TEST` env var) |
+| Test type | Vitest environment | What it covers |
+|-----------|-------------------|----------------|
+| Unit | `node` | `lib/` modules (crypto, auth, validation, db queries in isolation) |
+| Unit | `jsdom` | React components (`components/`) |
+| Integration | `node` | Server actions + real PostgreSQL (`DATABASE_URL_TEST` env var) |
 
 **No DB mocking in integration tests** — tests use a real PostgreSQL database, truncated between test runs.
 
-**Rationale**: `next/jest` provides the official Next.js-compatible Jest setup. No DB mocking: mocked tests can pass while real DB interactions fail (per project quality standards).
+**Test commands**:
+```bash
+# All tests
+npm test
+
+# Unit tests only
+npm test -- tests/unit
+
+# Integration tests (requires DATABASE_URL_TEST)
+DATABASE_URL_TEST=postgres://... npm test -- tests/integration
+```
+
+**Vitest config**: Declared in `vitest.config.ts` (or `vite.config.ts`). Uses `vite-tsconfig-paths` for path alias resolution (`@/` → project root).
+
+**Rationale**: Vitest is already configured in the project (`package.json` scripts `"test": "vitest"`). No DB mocking: mocked tests can pass while real DB interactions fail (per project quality standards).
