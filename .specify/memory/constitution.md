@@ -1,10 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
-Added sections: None
+Version change: 1.3.0 → 1.4.0
 Modified sections:
-  - Technology Stack: StyleX added as the mandatory styling solution
+  - Technology Stack → Styling bullet: expanded to mandate design token consumption
+    from '@/styles/tokens.stylex' and prohibit hardcoded CSS values or raw color
+    literals (hex, oklch, rgb, hsl, etc.) in components.
+  - Quality Gates: added gate for design-token compliance.
+Added sections: None
 Removed sections: None
 Deferred TODOs: None
 -->
@@ -13,11 +16,14 @@ Deferred TODOs: None
 
 ## Core Principles
 
-### I. Modular Component Design
+### I. Component-Driven Architecture & Reusability
 
-Files and components MUST be scoped to a single responsibility. Large, monolithic files MUST
-be split into focused modules. Reusability and clarity take precedence over co-location
-convenience.
+Build code using focused, maintainable components, balancing abstraction with a practical developer experience.
+
+- Single Responsibility: Keep components focused. Break them down if they become too complex or handle unrelated tasks.
+- Rule of Three: Avoid premature abstraction. Wait until a pattern is used three times before extracting it into a shared component.
+- Manage Complexity: Split large files to improve clarity, but avoid over-fragmenting the codebase into too many tiny files.
+- Embrace Co-location: Keep code close to where it is used. Co-locate single-use sub-components with their parents, and only move them to shared folders when genuinely reused elsewhere.
 
 ### II. Input Validation & Security
 
@@ -64,14 +70,15 @@ approval and a constitution amendment before any alternative is introduced.
 - **Framework**: Next.js (latest stable version) with the App Router. Pages Router is prohibited.
 - **Language**: TypeScript in strict mode. All code MUST be fully typed; `any` is prohibited
   without a documented, team-approved exception committed alongside the usage.
-- **Linting & Formatting**: Biome. All code MUST pass `biome check` before commit. ESLint and
-  Prettier MUST NOT be introduced; Biome is the sole linter and formatter.
+- **Linting & Formatting**: Biome. All code MUST pass `npm run verify` before commit. Biome is the sole linter and formatter.
 - **React Compiler**: Enabled. Manual `useMemo`, `useCallback`, and `React.memo` optimizations
   are prohibited unless the React Compiler explicitly cannot handle the case and a performance
   measurement justifies the exception.
-- **Styling**: StyleX (stylexjs.com). All styles MUST be written with StyleX. CSS Modules,
-  Tailwind, inline styles, and other CSS-in-JS libraries are prohibited. StyleX's atomic,
-  compile-time approach is the sole styling mechanism.
+- **Styling**: StyleX (`@stylexjs/stylex`). All UI component styles MUST be written with StyleX
+  and MUST consume design tokens imported from `@/styles/tokens.stylex`. Hardcoded CSS values
+  and raw color literals (hex, oklch, rgb, hsl, or any format) are prohibited in components;
+  every visual value MUST be expressed through a design token. CSS Modules, Tailwind, inline
+  styles, and other CSS-in-JS libraries are prohibited.
 - **Database**: PostgreSQL. No other relational or document database may be introduced without
   a constitution amendment.
 
@@ -85,6 +92,10 @@ Every contribution MUST satisfy the following gates before merging:
 - Any new third-party dependency has documented, explicit approval.
 - No inline or block comments present in application source files.
 - All TypeScript types are explicit; `any` is prohibited per the Technology Stack section.
+- No monolithic single-file implementations; all UI is composed from focused, reusable
+  components per Principle I.
+- All component styles use StyleX and reference only tokens from `@/styles/tokens.stylex`;
+  no hardcoded CSS values or raw color literals are present.
 
 ## Governance
 
@@ -101,4 +112,4 @@ Any amendment requires:
 All code reviews MUST verify compliance with this constitution. Violations of any MUST
 principle are blocking and MUST be resolved before merge.
 
-**Version**: 1.2.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-16
+**Version**: 1.4.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-17

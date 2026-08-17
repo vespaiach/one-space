@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["app/**", "pages/**", "components/**", "lib/**"]
+    "includes": ["app/**", "pages/**", "components/**", "lib/**", "styles/**"]
   },
   "formatter": {
     "enabled": true,
