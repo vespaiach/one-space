@@ -53,3 +53,27 @@ scale, redundancy, and multi-tenant flexibility.
 
 For the full technical specification — architecture, data model, security, and
 operations — see [specs folder](./specs).
+
+## Publishing Docker images
+
+The `Publish Docker image` GitHub Actions workflow runs CI, then builds and
+publishes a multi-platform image to Docker Hub when a semantic version tag is
+pushed. The image is not published if CI fails.
+
+Before the first release:
+
+1. Create a Docker Hub repository named `one-space`.
+2. In the GitHub repository's Actions settings, add a repository variable named
+   `DOCKERHUB_USERNAME` with the Docker Hub account or organization name.
+3. Add a repository secret named `DOCKERHUB_TOKEN` containing a Docker Hub
+   personal access token with permission to push to that repository.
+
+Publish a release by pushing a tag in the `vMAJOR.MINOR.PATCH` format:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+For `v0.1.0`, the workflow publishes `<username>/one-space` with the tags
+`0.1.0`, `0.1`, `latest`, and `sha-<full-commit-sha>` for immutable rollbacks.
