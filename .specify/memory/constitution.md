@@ -1,13 +1,11 @@
 <!--
 Sync Impact Report
 ==================
-Version change: (unfilled template) → 1.0.0
-Added sections:
-  - Core Principles (I–VII)
-  - Quality Gates
-  - Governance
-Modified principles: N/A (initial ratification)
-Removed sections: N/A
+Version change: 1.1.0 → 1.2.0
+Added sections: None
+Modified sections:
+  - Technology Stack: StyleX added as the mandatory styling solution
+Removed sections: None
 Deferred TODOs: None
 -->
 
@@ -58,15 +56,35 @@ Dead code is prohibited. Unused imports, variables, functions, and unreachable c
 MUST be removed before any commit. All code MUST pass configured linting and formatting
 rules before being pushed.
 
+## Technology Stack
+
+This project MUST use the following technology stack. Deviations require explicit governance
+approval and a constitution amendment before any alternative is introduced.
+
+- **Framework**: Next.js (latest stable version) with the App Router. Pages Router is prohibited.
+- **Language**: TypeScript in strict mode. All code MUST be fully typed; `any` is prohibited
+  without a documented, team-approved exception committed alongside the usage.
+- **Linting & Formatting**: Biome. All code MUST pass `biome check` before commit. ESLint and
+  Prettier MUST NOT be introduced; Biome is the sole linter and formatter.
+- **React Compiler**: Enabled. Manual `useMemo`, `useCallback`, and `React.memo` optimizations
+  are prohibited unless the React Compiler explicitly cannot handle the case and a performance
+  measurement justifies the exception.
+- **Styling**: StyleX (stylexjs.com). All styles MUST be written with StyleX. CSS Modules,
+  Tailwind, inline styles, and other CSS-in-JS libraries are prohibited. StyleX's atomic,
+  compile-time approach is the sole styling mechanism.
+- **Database**: PostgreSQL. No other relational or document database may be introduced without
+  a constitution amendment.
+
 ## Quality Gates
 
 Every contribution MUST satisfy the following gates before merging:
 
 - All tests pass (unit and integration where applicable).
-- No linting or formatting violations reported.
+- `biome check` exits with code 0; no violations suppressed without documented justification.
 - No unused imports, variables, or dead code paths present.
 - Any new third-party dependency has documented, explicit approval.
 - No inline or block comments present in application source files.
+- All TypeScript types are explicit; `any` is prohibited per the Technology Stack section.
 
 ## Governance
 
@@ -83,4 +101,4 @@ Any amendment requires:
 All code reviews MUST verify compliance with this constitution. Violations of any MUST
 principle are blocking and MUST be resolved before merge.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-16
+**Version**: 1.2.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-16
