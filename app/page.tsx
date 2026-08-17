@@ -1,7 +1,7 @@
-import * as stylex from '@stylexjs/stylex';
+import * as stylex from "@stylexjs/stylex";
 
 const styles = stylex.create({
-  container: { padding: '1rem' },
+  container: { padding: "1rem" },
 });
 
 export default function MyComponent() {

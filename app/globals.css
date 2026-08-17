@@ -4,4 +4,5 @@
   }
 }
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: stylex PostCSS plugin */
 @stylex;
