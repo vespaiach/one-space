@@ -8,11 +8,16 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format",
-    "verify": "npm run lint && npm run format && npm run build"
+    "verify": "npm run lint && npm run format && npm run build",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@stylexjs/stylex": "^0.19.0",
+    "drizzle-orm": "^0.45.2",
     "next": "16.3.1",
+    "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -25,6 +30,7 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.5.4",
     "babel-plugin-react-compiler": "1.0.0",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5"
   }
 }
