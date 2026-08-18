@@ -1,13 +1,11 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.3.0 → 1.4.0
-Modified sections:
-  - Technology Stack → Styling bullet: expanded to mandate design token consumption
-    from '@/styles/tokens.stylex' and prohibit hardcoded CSS values or raw color
-    literals (hex, oklch, rgb, hsl, etc.) in components.
-  - Quality Gates: added gate for design-token compliance.
-Added sections: None
+Version change: 1.4.0 → 1.5.0
+Modified sections: None
+Added sections:
+  - Specification Standards: mandates use of glossary-defined terms across all
+    feature specifications, user stories, acceptance scenarios, and requirements.
 Removed sections: None
 Deferred TODOs: None
 -->
@@ -97,6 +95,14 @@ Every contribution MUST satisfy the following gates before merging:
 - All component styles use StyleX and reference only tokens from `@/styles/tokens.stylex`;
   no hardcoded CSS values or raw color literals are present.
 
+## Specification Standards
+
+All feature specifications MUST adhere to the terminology defined in `.specify/GLOSSARY.md`.
+Glossary terms MUST be used consistently across all specifications, user stories, acceptance
+scenarios, and functional requirements. Introducing terminology that conflicts with or
+duplicates a glossary entry is prohibited without a corresponding glossary amendment filed
+alongside the specification.
+
 ## Governance
 
 This constitution supersedes all other documented practices and informal conventions.
@@ -112,4 +118,4 @@ Any amendment requires:
 All code reviews MUST verify compliance with this constitution. Violations of any MUST
 principle are blocking and MUST be resolved before merge.
 
-**Version**: 1.4.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-17
+**Version**: 1.5.0 | **Ratified**: 2026-08-16 | **Last Amended**: 2026-08-18
