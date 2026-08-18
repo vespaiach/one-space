@@ -77,3 +77,38 @@ git push origin v0.1.0
 
 For `v0.1.0`, the workflow publishes `<username>/one-space` with the tags
 `0.1.0`, `0.1`, `latest`, and `sha-<full-commit-sha>` for immutable rollbacks.
+
+## Deploying a published image
+
+Traefik is included in the Docker Compose stack. Follow the complete
+[deployment guide](./DEPLOYMENT.md) to configure DNS, environment variables,
+TLS, and the first deployment.
+
+On the server, create `.env` with the image version and database credentials:
+
+```dotenv
+APP_IMAGE=<username>/one-space:0.1.0
+APP_DOMAIN=<your-domain>
+POSTGRES_USER=one_space
+POSTGRES_PASSWORD=<strong-password>
+POSTGRES_DB=one_space
+```
+
+If the Docker Hub repository is private, log in with a read-only access token:
+
+```sh
+docker login --username <username>
+```
+
+Deploy the configured image:
+
+```sh
+./deploy.sh
+docker compose logs --tail=100 app
+curl -fsS https://<your-domain>/
+```
+
+For each release, update `APP_IMAGE` to the new version and run `./deploy.sh`
+again. Use a version tag rather than `latest` so the deployed artifact is
+explicit. To roll back, restore the previous version or immutable
+`sha-<full-commit-sha>` tag in `APP_IMAGE` and rerun the script.

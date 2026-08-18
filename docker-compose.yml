@@ -30,9 +30,7 @@ services:
       - internal
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: "${APP_IMAGE:?Set APP_IMAGE in .env}"
     container_name: one-space
     restart: unless-stopped
     env_file: .env
@@ -43,11 +41,12 @@ services:
       - postgres
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`one-space.stayon.online`)"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.app.rule=Host(`${APP_DOMAIN:?Set APP_DOMAIN in .env}`)"
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.services.app.loadbalancer.server.port=3000"
-      - "traefik.http.routers.app-http.rule=Host(`one-space.stayon.online`)"
+      - "traefik.http.routers.app-http.rule=Host(`${APP_DOMAIN:?Set APP_DOMAIN in .env}`)"
       - "traefik.http.routers.app-http.entrypoints=web"
       - "traefik.http.routers.app-http.middlewares=https-redirect"
       - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"

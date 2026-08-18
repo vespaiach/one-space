@@ -33,6 +33,9 @@ yarn-error.log*
 # env files
 .env
 
+# Traefik certificate storage
+/traefik/acme.json
+
 # vercel
 .vercel
 
