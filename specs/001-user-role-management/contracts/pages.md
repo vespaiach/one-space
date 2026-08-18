@@ -1,158 +1,119 @@
 # Page Contracts: User Role and Account Management
 
-**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-17
+**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-18
 
-Each entry defines a page route, its access requirements, the data it displays, and the actions it surfaces. Page routes map to Next.js App Router `page.tsx` files.
+Every page is an App Router Server Component boundary. Public pages reject inappropriate authenticated/restricted state; protected pages call `requireSession()` before loading data; Admin pages additionally call `requireAdmin()`. Rendering a control is never the authorization boundary for its mutation.
 
----
+## Shared UI and Accessibility Contract
 
-## Public Routes — No session required
+- Components use StyleX and values imported from `@/styles/tokens.stylex`; no raw component CSS values or color literals.
+- Every field has a programmatic label, instructions, and an associated error target. Validation summaries link to invalid fields and receive focus after failure.
+- Success, error, degraded-email, suspension, lockout, and conflict states use live status semantics and never rely on color alone.
+- Keyboard focus is visible and moves predictably after navigation, failed submission, confirmation, and forced-reset redirection.
+- Dialogs, when used for confirmation, trap focus, expose a name/description, return focus to the trigger, and support Escape without committing.
+- All functions remain usable by keyboard and at 200% zoom. Automated scans have no critical/serious findings; manual keyboard, focus, screen-reader, zoom, and error-identification checks are still required.
+- Token-bearing values never render into page markup, analytics, client logs, or links after the token-intake redirect.
+
+## Public Routes
 
 ### `GET /login`
 
 **File**: `app/(auth)/login/page.tsx`
 
-**Access**: Unauthenticated only. Redirect authenticated users to `/users`.
+**Access**:
 
-**Displays**:
-- Email field
-- Password field
-- "Remember me" checkbox
-- "Forgot password?" link → `/reset-password`
-- Submit button
+- No full or restricted cookie: render login.
+- Valid full session after a DB check: redirect `/users`.
+- Valid restricted forced-reset authorization after a DB check: redirect `/change-password`.
+- Invalid/expired cookie: render login; the next auth action overwrites/clears stale cookies because Server Components cannot mutate them.
 
-**On submit**: Calls `login` server action. On success: redirect to `/users`. On failure: display error (invalid credentials, account suspended, or account locked with unlock time).
+**Displays**: canonical email field, password field, Remember Me checkbox, Forgot Password link, submit button, and live error/status region.
 
----
+**Submit**: `login`. Success creates either a full session and redirects `/users`, or a restricted forced-reset authorization and redirects `/change-password`. Suspended and lockout messages are explicit as required; unknown email and wrong password share the generic credential error.
 
-### `GET /register?token=<encrypted-token>`
+### `GET /register`
 
 **File**: `app/(auth)/register/page.tsx`
 
-**Access**: Public. No session required.
+**Access**: Requires the short-lived invitation-flow HttpOnly cookie set by `GET /auth/invitation?token=...`. A missing, invalid, expired, wrong-purpose, post-registration, or rate-limited flow renders one non-secret error state and cannot create an account.
 
-**On page load**:
-1. Extract `token` from URL query params
-2. Decrypt and validate token server-side: if invalid, expired, or the email is already registered → render error state with message "This invitation link is invalid or has expired."
-3. If valid: render registration form with email pre-filled (read-only) from the decrypted token
+**Displays**: read-only canonical invited email, required First Name/Last Name, password and confirmation, full password rules, submit button, and explicit notice that invitation resends do not invalidate earlier authentic links.
 
-**Displays** (valid token path):
-- Email field (read-only, from token)
-- First Name field (required)
-- Last Name field (required)
-- Password field (required, with complexity rules shown)
-- Confirm Password field (required)
-- Submit button
-
-**On submit**: Calls `register` server action. On success: redirect to `/login` with a success message. On failure: display field-level errors.
-
----
+**Submit**: `register`. The flow credential comes from the cookie rather than a client field. Success atomically creates one Member and a fixed two-hour full session, consumes the flow cookie, sets the session cookie, and redirects `/users?registered=true`. A concurrent losing registration receives the normal email-in-use result and no session.
 
 ### `GET /reset-password`
 
 **File**: `app/(auth)/reset-password/page.tsx`
 
-**Access**: Public.
+**State A — request form**: No reset-flow cookie. Displays canonical email field and submit button. `requestPasswordReset` always returns the same generic confirmation and live announcement, including when no account exists or SMTP fails.
 
-**State 1 — Request form** (no `token` param):
-- Email field
-- Submit button
-- On submit: calls `requestPasswordReset` server action → always shows generic confirmation ("If that email is registered, a reset link has been sent.")
+**State B — password form**: A valid short-lived reset-flow cookie exists after `GET /auth/password-reset?token=...`. Displays new password, confirmation, rules, and submit. `completePasswordReset` consumes the DB token, changes the password, revokes sessions/restricted authorizations, clears the cookie, and redirects `/login?reset=true`.
 
-**State 2 — New password form** (`?token=<encrypted-token>` present):
-- On page load: decrypt and validate token server-side; if invalid/expired → render error state
-- Password field (required, complexity rules shown)
-- Confirm Password field (required)
-- Submit button
-- On submit: calls `completePasswordReset` server action. On success: redirect to `/login` with confirmation. On failure: display error.
+**Invalid flow**: Missing, expired, used, superseded, wrong-purpose, tampered, or rate-limited credentials show one safe failure with a link to request a new reset.
 
----
+### `GET /change-password`
 
-## Protected Routes — Valid session required
+**File**: `app/(auth)/change-password/page.tsx`
 
-All routes below: `proxy.ts` checks for session cookie; `getSession()` in the Server Component performs DB validation. No session → redirect to `/login`.
+**Access**: Requires a valid restricted forced-reset cookie/row and a current active Member with `force_password_reset=true`. It must not accept a full session as authorization. Missing/expired/revoked authorization clears cookies and redirects `/login?forcedResetExpired=true`.
 
----
+**Displays**: explanation that access is restricted, new password, confirmation, rules, and submit. No application navigation or profile data is rendered.
+
+**Submit**: `completeForcedPasswordReset`. Success updates the password, clears the flag, consumes/revokes restricted authorizations and full sessions, clears cookies, and redirects `/login?passwordChanged=true`. A fresh login is required.
+
+## Protected Routes
+
+All protected pages call `requireSession()` and use the current joined user row. A cookie's existence in Proxy is only a first-pass routing hint.
 
 ### `GET /users`
 
 **File**: `app/(shell)/users/page.tsx`
 
-**Access**: Any authenticated user (Admin or Member).
+**Access**: Any valid active Admin or Member full session.
 
-**Displays**: Paginated or full list of all users (no filtering). Per row:
-- Avatar (thumbnail) or default avatar placeholder
-- First Name + Last Name
-- Role badge (`Admin` or `Member`)
-- Link to full profile (`/users/[id]`)
+**Displays**: all Admin and Member accounts, including suspended accounts, with authenticated avatar/default placeholder, First Name, Last Name, Role, and profile link. Blank optional fields remain absent. Directory data is never cached publicly.
 
-**Admin-only controls** (rendered only when `session.role === 'admin'`):
-- "Invite member" button → `/admin/invitations`
-
----
+**Admin control**: Invite Member link appears only for a current Admin. The underlying page/action still calls `requireAdmin()`.
 
 ### `GET /users/[id]`
 
 **File**: `app/(shell)/users/[id]/page.tsx`
 
-**Access**: Any authenticated user.
+**Access**: Any valid full session; unknown ID returns not found without exposing data publicly.
 
-**Displays**:
-- Avatar or default placeholder
-- First Name, Last Name
-- Role (read-only badge)
-- Phone Number (if set)
-- Slack Handle (if set)
+**Displays**: authenticated avatar/default, normalized First Name/Last Name, read-only Role, Phone Number if present, Slack Handle if present, and account status where the current product UI requires it.
 
 **Controls**:
-- "Edit" button → `/users/[id]/edit` (always visible; self-edit allowed for own profile; Admin can edit any Member's profile)
-- Admin-only controls (rendered only when `session.role === 'admin'` AND viewed user's role is `'member'`):
-  - "Suspend" / "Reinstate" toggle (disabled if this is the last Admin — not applicable since this guard only shows for Members)
-  - "Force Password Reset" button
-  - "Promote to Admin" button
-  - "Delete Account" button (with confirmation dialog)
 
----
+- Edit appears for self, or for a current Admin viewing a current Member.
+- Suspend/Reinstate, Force Password Reset, and Promote appear only for a current Admin viewing an eligible current Member. Promote is absent for suspended Members.
+- No account-deletion control exists for any role/state.
+
+After a successful mutation the destination read waits for committed data and shows a live success message. Conflict/no-longer-eligible responses leave the current state intact and prompt a refresh.
 
 ### `GET /users/[id]/edit`
 
 **File**: `app/(shell)/users/[id]/edit/page.tsx`
 
-**Access**:
-- A user can only access their own profile edit page, unless they are an Admin
-- Admin can access any Member's edit page
-- Attempting to access another user's edit page as a Member → redirect to `/users/[id]` with an error
+**Access**: Self, or current Admin editing a current Member. A Member editing another user or an Admin targeting any Admin is rejected server-side.
 
-**Displays**:
-- First Name field (required)
-- Last Name field (required)
-- Phone Number field (optional)
-- Slack Handle field (optional)
-- Avatar upload/remove widget (JPEG/PNG, ≤ 5 MB)
-- Role field (read-only badge — no input)
-- Save button
-- Cancel button → `/users/[id]`
+**Displays**: First Name, Last Name, Phone Number, Slack Handle, avatar preview/upload/remove controls, read-only Role, Save, and Cancel. The file picker accepts JPEG/PNG as a hint but server-side decoded-content validation is authoritative. Upload guidance states 5 MB and 4096×4096 input limits plus processed-output behavior.
 
-**On submit**: Calls `updateProfile` server action. On success: redirect to `/users/[id]`. On failure: display field-level errors.
-
----
+**Submit**: One `updateProfile` Server Action receives normalized text intent and `avatarAction=keep|replace|remove` plus an optional file. Profile fields and avatar reference are one committed change; failure preserves all prior fields and avatar.
 
 ### `GET /admin/invitations`
 
 **File**: `app/(shell)/admin/invitations/page.tsx`
 
-**Access**: Admin only. Non-admin → redirect to `/users` with an error.
+**Access**: Current Admin only. A Member is rejected/redirected without recipient details.
 
-**Displays**:
-- Email field
-- "Send Invitation" button
+**Displays**: canonical email field, Send Invitation, email-capability status, and the mandatory FR-063 warning: each authentic stateless link remains usable until its own seven-day expiry or registration of that canonical email, and resend does not cancel earlier links.
 
-**On submit**: Calls `sendInvitation` server action. On success: show confirmation. On failure: show specific error (email already has account, invalid email format).
+**Submit**: `sendInvitation`. Success appears only after SMTP acceptance and repeats the non-revocation warning. Provider rejection/timeout is a retryable visible failure. Registered/suspended canonical-email ownership is rejected. Rate-limit responses do not reveal another user's activity.
 
----
+## Navigation and Data Freshness
 
-## Force-Password-Reset Interstitial
-
-**Not a standalone page** — implemented as a redirect in `getSession()`. If the resolved user has `force_password_reset = TRUE`, all protected routes redirect to `/reset-password` (State 2 — but driven by session context, not a URL token, using a special server-session-based flow).
-
-**Note to implementers**: The forced reset flow uses the existing session (the user is authenticated) but must still require a new password before granting full access. The implementation should use a `requireSession()` guard check that intercepts all `(shell)` routes when `force_password_reset = TRUE` and redirects to a dedicated `/change-password` page (not a token-based URL). This requires a separate page not covered by the token-based reset flow. Document as a separate implementation concern in `tasks.md`.
+- Protected layouts contain no forced-reset bypass; restricted users never receive the shell.
+- Server mutations call the appropriate immediate cache invalidation/refresh before redirect so the next directory/profile read reflects committed data.
+- Profile/avatar URLs include only user IDs and optional non-secret version keys; they never expose filesystem paths.
+- Authenticated pages and avatar responses prohibit shared/public caching.

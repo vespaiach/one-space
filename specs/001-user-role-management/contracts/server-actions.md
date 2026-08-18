@@ -1,267 +1,149 @@
 # Server Action Contracts: User Role and Account Management
 
-**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-17
+**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-18
 
-Each entry documents a Next.js Server Action: its file location, inputs, the preconditions it enforces, the mutations it performs, and its return/redirect behavior. All server actions call `getSession()` first when they require an authenticated user.
+Each Server Action is an independently reachable mutation boundary. It authenticates current state, authorizes, normalizes/validates, applies all relevant rolling limits, commits required DB/file effects, records a bounded audit event, invalidates affected reads, and only then returns success or redirects. Client-supplied role, status, email ownership, avatar paths, session identity, and eligibility are never trusted.
 
-"Throws" in this context means the server action returns an error result that the calling form/component displays; it does not mean an unhandled exception.
-
----
+Expected business failures return a discriminated, field-safe result for the UI; secrets, raw exceptions, database rows, and another user's rate-limit/account state are never returned.
 
 ## `app/actions/auth.ts`
 
-### `login(formData: FormData)`
+### `login(formData)`
 
-**Inputs**: `email: string`, `password: string`, `rememberMe: boolean`
+**Inputs**: `email`, `password`, `rememberMe`.
 
-**Preconditions** (evaluated in order — fail fast):
-1. Email format is valid
-2. User account exists with this email; if not → return generic "Invalid email or password" (no account enumeration)
-3. Account is not suspended; if suspended → return "Your account has been suspended. Contact your administrator."
-4. Account is not locked (`locked_until IS NULL OR locked_until < NOW()`); if locked → return "Account temporarily locked. Try again after [locked_until time]."
-5. Password matches `password_hash` (constant-time comparison with `timingSafeEqual`)
+**Order**:
 
-**On credential failure (step 5)**:
-- Increment `failed_login_attempts`
-- If `failed_login_attempts >= LOGIN_MAX_ATTEMPTS`: set `locked_until = NOW() + LOCKOUT_SECONDS`
-- Return "Invalid email or password"
+1. Canonicalize/validate email and bound password input.
+2. Apply `login_source` rolling limit (30 accepted attempts / 15 minutes) using the trusted-proxy source pseudonym.
+3. Look up the canonical email; use a fixed dummy scrypt hash path for unknown accounts so the generic failure path still performs password work.
+4. For a known account, lock the user row and enforce in order: suspension, active lockout (`now < locked_until`), then password verification.
+5. At or after `locked_until`, clear the expired lockout/count before evaluating credentials.
+6. On failure, atomically increment consecutive failures. The threshold-triggering failure sets `locked_until = now + configured whole minutes` and returns the exact next permitted time. Suspended/actively locked attempts do not increment.
+7. On success, clear failure/lockout state.
+8. If `force_password_reset=false`, create a full session token/hash with fixed 2-hour or 21-day expiry, set `session`, clear stale auth cookies, and redirect `/users`.
+9. If `force_password_reset=true`, revoke full sessions and prior restricted authorizations, create a 15-minute restricted authorization token/hash, set only `forced_reset`, and redirect `/change-password`.
 
-**On success**:
-- Reset `failed_login_attempts = 0`, clear `locked_until = NULL`
-- Create session: `INSERT INTO sessions (session_token, user_id, expires_at)` — `expires_at` based on `rememberMe` flag
-- Set `Set-Cookie: session=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Expires=<expires_at>`
-- If `force_password_reset = TRUE`: redirect to `/change-password`
-- Otherwise: redirect to `/users`
-
----
+**Errors**: Unknown email/wrong password share one message. Suspension is explicit. Active lockout is explicit with exact eligible time. Source limiting uses a generic bounded response and emits one transition event.
 
 ### `logout()`
 
-**Inputs**: None (reads session cookie)
+Read and hash `session`, mark only that row revoked, clear all auth/flow cookies, and redirect `/login`. A missing/invalid cookie is a successful idempotent logout.
 
-**Preconditions**: Session cookie present (no-op if missing)
+### `register(formData)`
 
-**Mutations**: `UPDATE sessions SET is_revoked = TRUE WHERE session_token = <cookie>`
-
-**On success**: Clear session cookie (`Set-Cookie: session=; Max-Age=0`); redirect to `/login`
-
----
-
-## `app/actions/auth.ts` — Registration
-
-### `register(formData: FormData)`
-
-**Inputs**: `token: string` (from hidden form field, originally from URL), `firstName: string`, `lastName: string`, `password: string`, `confirmPassword: string`
+**Inputs**: `firstName`, `lastName`, `password`, `confirmPassword`. The invitation credential is read only from `invitation_flow`; email and role are not accepted from the client.
 
 **Preconditions**:
-1. Token decrypts without error (AES-256-GCM authTag check)
-2. Token `expiresAt > now`
-3. Token `purpose === 'invitation'`
-4. No user account exists with the invitation's email (race-condition guard)
-5. `password === confirmPassword`
-6. Password meets complexity requirements (length, uppercase, lowercase, digit, special char)
 
-**Mutations** (single transaction):
-- Hash password with `crypto.scrypt`
-- `INSERT INTO users (email, password_hash, role, status, first_name, last_name)` with `role='member'`, `status='active'`
+- Flow token decrypts/authenticates; purpose is `invitation`; `now < expiresAt`; payload email satisfies FR-049.
+- Names satisfy FR-046; password confirmation and policy pass.
+- Invalid token validation applies the `token_validation_source` rolling limit without disclosing the failure subtype.
 
-**On success**: Redirect to `/login` with query param `?registered=true` (triggers a success message on the login page)
+**Transaction**:
 
----
+1. Acquire canonical-email advisory lock.
+2. Re-check canonical email is unregistered.
+3. Insert exactly one active Member with normalized profile and scrypt password hash.
+4. Insert a fixed 2-hour full session hash for the new user.
+5. Commit before setting cookies or reporting success.
+
+After commit, set `session`, clear `invitation_flow`, and redirect `/users?registered=true`. Unique/conflict losers create no user/profile/session, clear the flow, and receive the same email-in-use result as ordinary post-registration use.
 
 ## `app/actions/password.ts`
 
-### `requestPasswordReset(formData: FormData)`
+### `requestPasswordReset(formData)`
 
-**Inputs**: `email: string`
+**Input**: `email`.
 
-**Behavior** (always returns the same generic response — no account enumeration):
-1. Validate email format
-2. Look up user by email; if not found → return generic "If that email is registered, a reset link has been sent."
-3. If found:
-   - Invalidate all prior reset tokens: `UPDATE password_reset_tokens SET used = TRUE WHERE user_id = $1 AND used = FALSE`
-   - Generate new encrypted token: `{ userId, email, expiresAt, purpose: 'password-reset' }`
-   - `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)`
-   - Send reset email via `sendPasswordResetEmail(email, token)`
-4. Return generic confirmation message regardless of whether the user existed
+Canonicalize email and independently apply `reset_recipient` (5/hour) and `reset_source` (20/hour) using pseudonymous keys. Every path returns the same generic confirmation.
 
----
+For a known user under the limits:
 
-### `completePasswordReset(formData: FormData)`
+1. Lock the user; mark prior unused reset rows used; generate a purpose-bound encrypted 60-minute credential with random nonce; store only the nonce hash.
+2. Commit issuance, construct the HTTPS URL from validated `APP_ORIGIN`, and call SMTP.
+3. On SMTP acceptance, record success without recipient/token data.
+4. On rejection/timeout, mark the new row used when possible and record an operator-visible degraded/failed audit event. Do not expose the failure or account existence to the requester.
 
-**Inputs**: `token: string`, `password: string`, `confirmPassword: string`
+Suspended users may receive/use a reset link; resetting does not reinstate them or end an unexpired lockout.
 
-**Preconditions**:
-1. Token decrypts without error
-2. Token `expiresAt > now`
-3. Token `purpose === 'password-reset'`
-4. Reset token record exists by `token_hash` with `used = FALSE AND expires_at > NOW()`
-5. `password === confirmPassword`
-6. Password meets complexity requirements
+### `completePasswordReset(formData)`
 
-**Mutations** (single transaction):
-- Hash new password
-- `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
-- `UPDATE password_reset_tokens SET used = TRUE WHERE token_hash = $1`
-- Note: if user is suspended, password is still updated but login remains denied (FR-023)
+**Inputs**: `password`, `confirmPassword`; credential comes from `password_reset_flow`.
 
-**On success**: Redirect to `/login?reset=true`
+Validate purpose/confidentiality/tamper protection, nonce hash, password policy, and `token_validation_source` failures. In one transaction lock token and user; require unused and `now < expires_at`; update password hash; set `used_at`; revoke all full sessions and forced-reset authorizations; preserve status and unexpired lockout; record audit event. Commit, clear all session/reset cookies, and redirect `/login?reset=true`.
 
----
+Used, superseded, expired, modified, or wrong-purpose credentials share one safe invalid-link result.
+
+### `completeForcedPasswordReset(formData)`
+
+**Inputs**: `password`, `confirmPassword`; authorization comes from `forced_reset`.
+
+Call `requireForcedReset()`, validate the shared password policy, then lock authorization and user. Require active Member, `force_password_reset=true`, and unconsumed/unrevoked authorization with `now < expires_at`. Atomically update password, clear flag, consume/revoke every restricted authorization, revoke all full sessions, and record audit event. Commit, clear cookies, and redirect `/login?passwordChanged=true`.
+
+Expiry/revocation leaves the flag set and requires credential authentication again. This action never creates a full session.
 
 ## `app/actions/invitations.ts`
 
-### `sendInvitation(formData: FormData)`
+### `sendInvitation(formData)`
 
-**Inputs**: `email: string`
+**Input**: `email`.
 
-**Preconditions**:
-1. Caller is authenticated (`getSession()` returns non-null)
-2. Caller's role is `'admin'`; if not → throw `Forbidden`
-3. Email format is valid
-4. No active user account with this email (FR-007)
+1. Call `requireAdmin()` and canonicalize email.
+2. Independently apply `invite_actor` (20/hour) and `invite_recipient` (5/day) limits.
+3. Reject if any active or suspended user owns the canonical email.
+4. Generate a fresh AES-256-GCM invitation credential with at least 128 bits of randomness, purpose `invitation`, and expiry exactly seven days after issuance.
+5. Construct the HTTPS intake URL from `APP_ORIGIN`; never from request Host.
+6. Await SMTP acceptance.
+7. Only after acceptance return success and the FR-063 warning that resending does not revoke earlier links. On rejection/timeout, return a retryable Admin-visible failure and record a secret-free operator event.
 
-**Mutations**:
-- Generate encrypted invitation token: `{ email, expiresAt, purpose: 'invitation' }`
-- Send invitation email via `sendInvitationEmail(email, token)`
-
-> No invitation record is inserted into the database. The token is self-contained; validity is assessed entirely at registration time.
-
-**On success**: Return success message "Invitation sent to [email]"
-
----
+No invitation row is written. Delivery delay/duplication does not alter credential expiry. No log/audit field contains recipient email, link, or token.
 
 ## `app/actions/users.ts`
 
-### `updateProfile(formData: FormData)`
+This module exports no delete action and performs no user-row deletion. A crafted request therefore has no supported mutation target and changes nothing.
 
-**Inputs**: `targetUserId: string`, `firstName: string`, `lastName: string`, `phoneNumber: string | null`, `slackHandle: string | null`
+### `updateProfile(formData)`
 
-**Preconditions**:
-1. Caller is authenticated
-2. `targetUserId === session.userId` (self-edit) OR caller's role is `'admin'` (FR-011, FR-012)
-3. Target user exists
-4. If Admin editing: target user's role must be `'member'` (Admins cannot edit other Admins per assumptions)
-5. `firstName` and `lastName` are non-empty (FR-033)
+**Inputs**: `targetUserId`, `firstName`, `lastName`, `phoneNumber`, `slackHandle`, `avatarAction=keep|replace|remove`, optional `avatarFile`. Role, status, actor, email, and avatar key are not accepted.
 
-**Mutations**:
-- `UPDATE users SET first_name=$1, last_name=$2, phone_number=$3, slack_handle=$4, updated_at=NOW() WHERE id=$5`
-- Note: `role` is never updated by this action
+**Authorization**:
 
-**On success**: Redirect to `/users/[targetUserId]`
+- Active Member may edit self.
+- Current Admin may edit a current Member.
+- Any Member targeting another user and every Admin-account target, including the acting Admin, is rejected under FR-011/017.
 
----
+**Processing and commit**:
 
-### `suspendUser(formData: FormData)`
+1. Authenticate and perform a current-row eligibility check before image decoding.
+2. Normalize/validate all profile fields.
+3. For `replace`, require one JPEG/PNG input at most 5 MB, decode content, reject mismatch/animation/active content/dimensions over 4096×4096, re-encode without metadata within 512×512 and 1 MB, and durably stage an immutable candidate outside the web root.
+4. Begin transaction; acquire target account-state lock; lock user row; repeat authorization/eligibility against current state.
+5. Update all profile fields and avatar reference together. `remove` with no avatar is a no-op. Commit and record audit event before success.
+6. On any pre-commit failure, delete candidate and preserve every prior field/file. After commit, delete old file; cleanup failure records an operations event for reconciliation but does not roll back the already-correct new reference.
+7. Invalidate directory and target profile reads; redirect `/users/[id]?updated=true`.
 
-**Inputs**: `targetUserId: string`
+### `suspendUser(formData)`
 
-**Preconditions**:
-1. Caller is authenticated with role `'admin'`
-2. Target user exists with role `'member'` (Admins cannot suspend other Admins per assumptions)
-3. Not the last active Admin (redundant here since target is Member, but guard is in place)
+**Input**: `targetUserId`.
 
-**Mutations**: `UPDATE users SET status = 'suspended', updated_at = NOW() WHERE id = $1`
+Require current Admin. In an account-state transaction lock/re-read target; require current Member and active status; preserve active-Admin invariant; set suspended; revoke all full sessions and restricted forced-reset authorizations; preserve password, profile/avatar, reset history, canonical email, lockout, and forced-reset flag; record audit event; commit; then report success. Concurrent/no-longer-eligible requests return conflict without partial changes.
 
-**Side effect**: All active sessions for the target user are immediately revoked:
-`UPDATE sessions SET is_revoked = TRUE WHERE user_id = $1 AND is_revoked = FALSE`
+### `reinstateUser(formData)`
 
-**On success**: Redirect to `/users/[targetUserId]`
+Require current Admin. Lock/re-read target; require current suspended Member; change only status to active; preserve password, sessions history, lockout, forced-reset flag, profile/avatar, reset history, and canonical email; record and commit. No session is created. The next credential login succeeds only if lockout/forced reset independently permits it.
 
----
+### `promoteToAdmin(formData)`
 
-### `reinstateUser(formData: FormData)`
+Require current Admin. Lock/re-read target; require current active Member; preserve active-Admin invariant; set role Admin; preserve every full session; record and commit. Existing valid sessions gain Admin rights on their next protected request because guards read current role. A suspended or concurrently changed target is rejected.
 
-**Inputs**: `targetUserId: string`
+### `forcePasswordReset(formData)`
 
-**Preconditions**:
-1. Caller is authenticated with role `'admin'`
-2. Target user exists with `status = 'suspended'`
+Require current Admin. Lock/re-read target; require current Member (active or suspended); set flag true; revoke all full sessions and restricted authorizations before success; preserve status, password, profile/avatar, canonical email, and unexpired lockout; record and commit. A suspended Member remains unable to authenticate; an active locked Member must wait until the exact lockout end.
 
-**Mutations**: `UPDATE users SET status = 'active', updated_at = NOW() WHERE id = $1`
+## Cache, Redirect, and Audit Rules
 
-**On success**: Redirect to `/users/[targetUserId]`
-
----
-
-### `deleteUser(formData: FormData)`
-
-**Inputs**: `targetUserId: string`
-
-**Preconditions**:
-1. Caller is authenticated with role `'admin'`
-2. Target user exists with role `'member'`
-3. **Last-Admin guard**: confirm at least one other active Admin exists (not applicable here since target is Member; guard is belt-and-suspenders)
-4. Caller is not deleting themselves (belt-and-suspenders guard)
-
-**Mutations** (transaction):
-- `DELETE FROM users WHERE id = $1`
-- Sessions and reset tokens cascade via `ON DELETE CASCADE`
-
-**On success**: Redirect to `/users`
-
----
-
-### `promoteToAdmin(formData: FormData)`
-
-**Inputs**: `targetUserId: string`
-
-**Preconditions**:
-1. Caller is authenticated with role `'admin'`
-2. Target user exists with role `'member'`
-
-**Mutations**: `UPDATE users SET role = 'admin', updated_at = NOW() WHERE id = $1`
-
-**On success**: Redirect to `/users/[targetUserId]`
-
----
-
-### `forcePasswordReset(formData: FormData)`
-
-**Inputs**: `targetUserId: string`
-
-**Preconditions**:
-1. Caller is authenticated with role `'admin'`
-2. Target user exists with role `'member'`
-
-**Mutations**: `UPDATE users SET force_password_reset = TRUE, updated_at = NOW() WHERE id = $1`
-
-**On success**: Redirect to `/users/[targetUserId]`
-
----
-
-## `app/api/avatar/route.ts` (Route Handler, not Server Action)
-
-### `POST /api/avatar`
-
-**Content-Type**: `multipart/form-data`
-
-**Fields**: `targetUserId: string`, `file: File`
-
-**Preconditions**:
-1. Caller is authenticated (read session cookie from request headers)
-2. `targetUserId === session.userId` OR caller's role is `'admin'`
-3. `file.type` is `'image/jpeg'` or `'image/png'` (MIME check — not just extension)
-4. `file.size <= 5 * 1024 * 1024` (5 MB)
-
-**Mutations**:
-- Write file to `public/avatars/<targetUserId>.<ext>` (overwrite if exists)
-- `UPDATE users SET avatar_path = $1, updated_at = NOW() WHERE id = $2`
-
-**On success**: `200 OK` with `{ avatarPath: "/avatars/<targetUserId>.<ext>" }`
-
-**On failure**: `400` (validation) or `403` (permission)
-
----
-
-### `DELETE /api/avatar`
-
-**Body**: `{ targetUserId: string }`
-
-**Preconditions**: Same as POST (auth + permission)
-
-**Mutations**:
-- Delete file from `public/avatars/<targetUserId>.*` if it exists
-- `UPDATE users SET avatar_path = NULL, updated_at = NOW() WHERE id = $1`
-
-**On success**: `200 OK`
+- Mutations invalidate/refresh affected user list/profile data before redirecting; success always corresponds to committed state.
+- Audit insertion for security-sensitive DB mutations occurs in the same transaction as the mutation. SMTP/file-cleanup outcomes that happen outside the DB transaction receive their own bounded operations event.
+- Audit fields are limited to category/action/outcome, actor ID, target ID, reason code, timestamp, and generated audit ID. No free-form user data or credential enters them.
+- Redirect destinations are fixed or validated relative paths; no action redirects to client-supplied origins.

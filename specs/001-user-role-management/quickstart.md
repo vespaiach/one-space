@@ -1,246 +1,195 @@
 # Quickstart Validation Guide: User Role and Account Management
 
-**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-17
+**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-18
 
-This guide describes runnable validation scenarios that prove the feature works end-to-end. It references the [data model](data-model.md) and [contracts](contracts/) rather than duplicating them.
-
----
+This is the implementation validation/run guide. It proves behavior through the [data model](data-model.md) and [contracts](contracts/) without duplicating implementation code. Record environment, commit/image, timestamps, and evidence for every production-like or operational run.
 
 ## Prerequisites
 
-1. PostgreSQL running locally or accessible via `DATABASE_URL`
-2. SMTP service configured (or use a dev tool like Mailpit/MailHog on `localhost:1025`)
-3. All required environment variables set (see [data-model.md — Environment Variables](data-model.md)):
-   ```
+1. GOV-003 (`sharp`), GOV-004 (`axe-core`), and GOV-005 (`@types/nodemailer`) are Approved before those dependencies are added or imported.
+2. Node.js 20 and `npm ci` complete.
+3. An isolated PostgreSQL database is available for tests. Never point destructive integration cleanup at inherited/development/production `DATABASE_URL`.
+4. A controllable SMTP test service supports accepted, rejected, timeout, delayed, and duplicate-delivery fixtures.
+5. A writable private avatar directory is outside `public` and the checkout/release tree.
+6. Environment contains the values defined in [data-model.md — Environment and Deployment Inputs](data-model.md#environment-and-deployment-inputs), including:
+
+   ```dotenv
    DATABASE_URL=postgres://...
-   INVITATION_SECRET_KEY=<64-char hex>   # generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   DATABASE_URL_TEST=postgres://.../one_space_feature_test
+   APP_ORIGIN=https://one-space.test
+   TOKEN_ENCRYPTION_KEY=<32-byte secret>
+   RATE_LIMIT_HASH_KEY=<secret>
+   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<stable secret>
+   LOGIN_MAX_ATTEMPTS=5
+   LOGIN_LOCKOUT_MINUTES=15
    SMTP_HOST=localhost
    SMTP_PORT=1025
-   SMTP_USER=test
-   SMTP_PASS=test
-   SMTP_FROM=noreply@one-space.local
+   SMTP_FROM=noreply@one-space.test
    INITIAL_ADMIN_EMAIL=admin@example.com
    INITIAL_ADMIN_PASSWORD=Admin1234!
+   INITIAL_ADMIN_FIRST_NAME=Initial
+   INITIAL_ADMIN_LAST_NAME=Admin
+   AVATAR_STORAGE_PATH=/absolute/private/avatar-test-volume
+   BACKUP_ENCRYPTION_KEY_FILE=/absolute/private/backup-test.key
    ```
-4. Database schema applied:
-   ```bash
-   npm run db:generate   # generate migration files from Drizzle schema
-   npm run db:migrate    # apply migrations to DATABASE_URL
-   ```
-5. Initial Admin seeded (run bootstrap/seed script)
-6. App running: `npm run dev` (or `npm run build && npm start`)
 
----
+7. Migrations are generated/reviewed and applied to the isolated DB. The application or production-equivalent Compose stack is running behind HTTPS/Traefik for cookie and proxy tests.
 
-## Scenario 1 — Initial Admin Login (US2)
-
-**Goal**: Confirm the seed Admin can log in with the configured credentials.
-
-**Steps**:
-1. Navigate to `http://localhost:3000/login`
-2. Enter `admin@example.com` / `Admin1234!`
-3. Do not check "Remember me"
-4. Submit
-
-**Expected**:
-- Redirected to `/users`
-- Admin is listed in the user directory
-- Session cookie is set (inspect via browser DevTools → Application → Cookies)
-- Cookie is `HttpOnly` (not visible via `document.cookie`)
-- Cookie `Expires` is approximately 2 hours from now
-
-**Verify Remember Me variant**: Repeat with "Remember me" checked. Cookie `Expires` should be approximately 21 days from now.
-
----
-
-## Scenario 2 — Invitation Flow (US1)
-
-**Goal**: Admin invites a new member; invitee registers and can log in.
-
-**Steps**:
-1. Log in as Admin (Scenario 1)
-2. Navigate to `http://localhost:3000/admin/invitations`
-3. Enter `member@example.com`, submit "Send Invitation"
-4. Confirm: success message shown
-5. Check email inbox (Mailpit UI at `http://localhost:8025` or equivalent)
-6. Open the invitation email; click the registration link
-7. Confirm: `http://localhost:3000/register?token=<encrypted-token>` loads; email is pre-filled (read-only)
-8. Enter First Name: `Alice`, Last Name: `Smith`, password: `Member1234!`
-9. Submit
-
-**Expected**:
-- Redirected to `/login?registered=true`
-- Login page shows a success message
-- DB: new row in `users` with `role='member'`, `status='active'`
-
-**Log in as the new member**: Use `member@example.com` / `Member1234!`. Confirm redirect to `/users`.
-
----
-
-## Scenario 3 — Invalid Invitation Links (US1 edge cases)
-
-**Goal**: Confirm invalid invitation links are rejected.
-
-**3a — Email already registered**:
-1. As Admin, attempt to send an invitation to `member@example.com` (already registered)
-2. Expected: error "This email address already has an account"
-
-**3b — Expired token**:
-1. Set `INVITATION_EXPIRY_DAYS=0` temporarily and send an invitation
-2. Follow the link immediately
-3. Expected: page shows "This invitation link is invalid or has expired"
-
-**3c — Email registered between invite and registration** (race condition):
-1. Invite `race@example.com`
-2. Before following the link, manually insert a user row with `email = 'race@example.com'` in the DB
-3. Follow the invitation link and attempt to register
-4. Expected: registration is rejected with "This invitation link is invalid or has expired" (email already in use)
-
----
-
-## Scenario 4 — Profile Viewing and Self-Editing (US3, US4)
-
-**Goal**: Any logged-in user can view all profiles; users can edit only their own.
-
-**Steps**:
-1. Log in as `member@example.com`
-2. Navigate to `/users` — confirm both Admin and Member are listed with Avatar, First Name, Last Name, Role
-3. Click on the Admin's profile — confirm all fields (Phone Number, Slack Handle) are visible
-4. Navigate to `/users/[admin-id]/edit` — expected: redirect back to `/users/[admin-id]` with an access error (member cannot edit Admin's profile)
-5. Navigate to own profile edit (`/users/[member-id]/edit`): update Phone Number to `+1-555-0100`, save
-6. Confirm: profile view shows `+1-555-0100`
-7. Confirm: Role field is read-only in the edit form
-
----
-
-## Scenario 5 — Admin Account Management (US5)
-
-**Goal**: Admin can suspend, reinstate, delete, and force-password-reset a Member.
-
-**5a — Suspend**:
-1. As Admin, navigate to Member's profile; click "Suspend"
-2. Expected: Member is suspended; Admin still shown as active
-3. Attempt to log in as the Member: expected error "Your account has been suspended. Contact your administrator."
-4. Failed login against suspended account: confirm `failed_login_attempts` is NOT incremented (check DB)
-
-**5b — Reinstate**:
-1. As Admin, click "Reinstate" on the suspended Member's profile
-2. Expected: Member can log in again
-
-**5c — Force Password Reset**:
-1. As Admin, click "Force Password Reset" on Member's profile
-2. Log in as the Member
-3. Expected: immediately redirected to `/change-password`; all other routes are inaccessible until new password is set
-4. Set a new compliant password; confirm redirect to `/users`; confirm `force_password_reset = FALSE` in DB
-
-**5d — Delete**:
-1. As Admin, click "Delete Account" on a Member's profile; confirm the dialog
-2. Expected: Member no longer appears in `/users`; DB row gone; all sessions for that user deleted (cascade)
-
----
-
-## Scenario 6 — Last-Admin Guard (US5 edge case)
-
-**Goal**: The system prevents deleting or suspending the last Admin.
-
-**Steps**:
-1. Ensure only one Admin account exists
-2. As that Admin, navigate to own profile — confirm "Suspend" and "Delete" are absent or disabled (since Admins cannot manage other Admins, and self-deletion is blocked)
-3. Alternatively: if test harness allows direct action invocation, call `deleteUser` or `suspendUser` with the last Admin's ID
-4. Expected: action returns an error; Admin account remains active
-
----
-
-## Scenario 7 — Role Promotion (US6)
-
-**Goal**: Admin can promote a Member to Admin.
-
-**Steps**:
-1. As Admin, navigate to Member's profile; click "Promote to Admin"
-2. Expected: Member's role badge changes to `Admin`; Promote button is gone; Admin controls for that user disappear
-3. Log in as the promoted user — confirm they can access `/admin/invitations` and send an invitation
-
----
-
-## Scenario 8 — Self-Service Password Reset (US7)
-
-**Goal**: User can reset a forgotten password.
-
-**Steps**:
-1. Navigate to `/login` → click "Forgot password?"
-2. Enter `member@example.com`, submit
-3. Expected: generic confirmation message (even for an unregistered email — try `nobody@example.com` to confirm same message, no email sent)
-4. Open the reset email; click the link
-5. Enter a new password `NewMember1234!`, confirm, submit
-6. Expected: redirect to `/login?reset=true`
-7. Attempt to use the same reset link again: expected "This link is invalid or has already been used"
-8. Log in with new password — confirm success
-
----
-
-## Scenario 9 — Account Lockout (FR-024/025/026)
-
-**Goal**: Brute-force protection triggers after N failed attempts and clears automatically.
-
-**Steps**:
-1. As logged-out user, submit incorrect password for `member@example.com` 5 times
-2. Expected on 5th failure: error "Account temporarily locked. Try again after [time]"
-3. Confirm: `users.locked_until` is set in DB to approximately 15 minutes from now
-4. Attempt a 6th login: expected same lockout message
-5. In test: set `locked_until` to a past timestamp in DB (or wait 15 minutes in real test)
-6. Attempt login with correct password: expected success; confirm `failed_login_attempts = 0` and `locked_until = NULL` in DB
-
----
-
-## Scenario 10 — Avatar Upload and Removal (US8)
-
-**Goal**: Valid uploads are saved; invalid files are rejected; removal clears the avatar.
-
-**Steps**:
-1. Log in as Member; navigate to own profile edit
-2. Upload a valid JPEG under 5 MB
-3. Expected: avatar displayed in user directory and full profile view
-4. Upload a PNG file with a `.txt` extension (MIME check must catch this)
-5. Expected: rejection with a specific error; original avatar unchanged
-6. Upload a JPEG over 5 MB
-7. Expected: rejection with a specific error; original avatar unchanged
-8. Click "Remove avatar"
-9. Expected: profile shows default no-avatar placeholder; `avatar_path = NULL` in DB
-
----
-
-## Scenario 11 — Session Expiry and Revocation
-
-**Goal**: Sessions expire as configured; logout revokes the session immediately.
-
-**11a — Logout revokes session**:
-1. Log in; note the session token from the cookie
-2. Log out
-3. Confirm: `sessions.is_revoked = TRUE` for that token in DB
-4. Manually re-set the cookie to the old token value (DevTools)
-5. Navigate to `/users`: expected redirect to `/login`
-
-**11b — Standard session expiry** (test with shortened duration):
-1. Set `SESSION_DURATION_SECONDS=5` for testing
-2. Log in; wait 6 seconds
-3. Navigate to `/users`: expected redirect to `/login`
-
----
-
-## Running Automated Tests
+## Baseline Commands
 
 ```bash
-# All tests
-npm test
-
-# Unit tests only (no DB required)
-npm test -- tests/unit
-
-# Integration tests (requires DATABASE_URL_TEST pointing to a test DB)
-DATABASE_URL_TEST=postgres://... npm test -- tests/integration
-
-# Run with verbose output
-npm test -- --reporter=verbose
+npm ci
+DATABASE_URL="$DATABASE_URL_TEST" npm run db:migrate
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npm test -- --run
+npm run verify
 ```
 
-Integration tests truncate all tables between test suites. They do not use mocks for the database layer.
+After implementation, dedicated commands must also exist and exit nonzero on failure:
+
+```bash
+npm run test:accessibility
+npm run test:integration
+```
+
+SC-004 performance is a recorded production-equivalent browser run; it does not require adding an unapproved browser-automation dependency.
+
+`npm run verify` and static fixtures do not prove live SMTP acceptance, HTTPS cookie behavior, Docker volume durability, backup restoration, or a quarterly restore exercise; run the corresponding scenarios below.
+
+## Scenario 1 — Bootstrap and Repeat Deployment (US2, SC-006/007)
+
+Run each case against a fresh isolated database snapshot:
+
+| Case | Setup | Expected startup result |
+|------|-------|-------------------------|
+| Empty + valid config | No users; all initial Admin inputs valid | Server becomes ready only after exactly one active Admin exists and can log in |
+| Empty + missing/invalid config | No users; remove or invalidate one required input | Startup exits/fails readiness before traffic; no row created |
+| Existing active Admin | Re-run with same, changed, and absent initial Admin config | Startup succeeds; account count, credentials, role, profile, and timestamps remain unchanged |
+| Non-empty, no active Admin | Fixture contains data but no active Admin | Startup fails with bounded recovery reason; no account is created/promoted |
+| Concurrent bootstrap | Start two application processes against the same empty DB | Exactly one Admin is inserted; both processes never create duplicates |
+
+Confirm initial credentials cannot be rotated by changing deployment variables; use password reset for rotation.
+
+## Scenario 2 — Invitation, Resend, and Concurrent Registration (US1, SC-001/002/017/020)
+
+1. Log in as Admin and open `/admin/invitations`.
+2. Confirm the screen states that resending does not revoke earlier stateless links.
+3. Send to a mixed-case/whitespace address and verify the SMTP service accepts before UI success.
+4. Confirm audit/log data contains no canonical recipient or token.
+5. Open the delivered intake URL. Verify the browser immediately redirects to clean `/register`, the token is absent from address/history-visible page state, and `Referrer-Policy` prevents leakage.
+6. Complete normalized names and a compliant password. Verify one active Member and one fixed two-hour full session commit, the invitation-flow cookie clears, and the browser reaches `/users`.
+7. Measure SC-001 from the email service's recorded delivery timestamp to registration-success display; require under 3 minutes and report pre-delivery SMTP time separately.
+8. Attempt self-registration without a flow, a tampered token, wrong-purpose token, exact-expiry token, expired token, and any authentic link after registration. Require rejection and no extra user/session.
+9. For an unregistered canonical email, send two links. Use both concurrently at the transaction barrier. Require exactly one user/session winner; the loser returns email-in-use and creates nothing.
+10. Resend after a lost/expired link. Confirm the new link expires seven days from its own issuance and an earlier unexpired link remains valid until registration.
+11. Invitation to an active or suspended account's canonical email is rejected.
+
+## Scenario 3 — Login, Sessions, Lockout, and Logout (SC-009/012/017/018)
+
+1. Login without Remember Me; verify cookie flags and DB expiry exactly 2 hours after creation. Repeat with Remember Me and require exactly 21 days.
+2. Verify activity never changes `expires_at`; at exact expiry the session is rejected.
+3. Logout, restore the old raw cookie manually, and require rejection because only its hash exists and the row is revoked.
+4. For threshold 5, submit four wrong passwords and confirm no lock. The fifth failure must lock until exactly trigger time + 15 minutes.
+5. Before that instant, every login is rejected with exact eligible time. At that instant, the first valid credential succeeds within 1 second and failed count/lock clear.
+6. Confirm suspension/password reset/reinstatement does not clear an independently unexpired lockout.
+7. Submit 30 source-address attempts inside 15 minutes; the 30th is accepted for rate-limit accounting and the 31st is rejected. Confirm exactly one secret-free `rate_limit.entered` event for the limited interval.
+8. Confirm unknown email and wrong password responses are equivalent; suspended and locked states use their specified explicit messages.
+
+## Scenario 4 — Team Profiles, Normalization, Privacy, and Performance (US3/US4, SC-004/008/016)
+
+1. As Member, verify `/users` shows every role/status with avatar/default, normalized First Name, Last Name, and Role; full profiles add only present Phone/Slack fields.
+2. Verify unauthenticated page and avatar requests reveal no team/profile data.
+3. As Member, update own profile with Unicode whitespace/NFC cases, blank optionals, `@Mixed.Handle`, and a valid printable phone. Require exact FR-046–FR-048 normalized persistence on the next read.
+4. Exercise every invalid length/character boundary and require linked field errors, focus placement, no partial write, and live announcement.
+5. Member editing another user is rejected. Admin management edit succeeds only for a Member. Any Admin-account target, including the acting Admin, is rejected under FR-017.
+6. Run 100 production-equivalent profile navigations with 20 users and 10 concurrent authenticated users. Exclude only the first post-deploy cold start, measure navigation until all text/avatar/default is visible, and require at least 95 under 2.0 seconds. Record the cold result separately.
+
+## Scenario 5 — Member State, Promotion, and No Deletion (US5/US6, SC-003/005/006/009/011/015)
+
+For each supported action, start from the rendered user list, count only click/tap/keyboard control activations, and require committed visible success in at most three.
+
+1. Suspend an active Member with multiple sessions. Before Admin success, require status committed and every session/restricted authorization revoked; next login/protected request is denied.
+2. Reinstate. Require only status changes; password, lockout, forced-reset flag, profile, avatar, reset history, and canonical email remain identical. Next login respects preserved lockout/forced reset.
+3. Promote an active Member while they have valid sessions. Require role committed and those sessions gain Admin access on their next protected request without renewal.
+4. Attempt to promote a suspended Member or target any Admin with edit/suspend/demote semantics. Require rejection and at least one active Admin preserved.
+5. Race suspend vs promote, reinstate vs promote, and duplicate requests at a transaction barrier. Require one eligible commit, conflict/no-longer-eligible losers, and final state matching FR-050.
+6. As Member, invoke every Admin action directly. Require forbidden outcomes with no change.
+7. Confirm no delete control, exported action, or HTTP mutation exists. Try crafted DELETE/action calls and compare DB rows, avatar files, sessions, reset records, email ownership, and audit history before/after; require no account/profile deletion.
+
+## Scenario 6 — Self-Service Reset (US7, SC-010/017/018/020)
+
+1. Request reset for known, unknown, active, suspended, mixed-case, and whitespace variants. User-visible text and status are identical; unknown sends no email.
+2. Verify link validity starts at accepted request time and ends exactly 60 minutes later; exact-expiry use fails.
+3. Issue a second link and require the first to be superseded. Use the second once, then require reuse rejection.
+4. Verify clean URL intake, purpose/tamper/nonce-hash checks, no raw token at rest/logs/referrers, and shared password policy.
+5. On completion, require password commit, token use, full/restricted session revocation, flow-cookie clearing, and fresh login. Suspension and unexpired lockout remain.
+6. Boundary-test 5 canonical-recipient/hour and 20 source/hour independently; final permitted accepts, first excess rejects generically, and each limited-state transition emits one event.
+7. Complete an active user's valid flow within 5 minutes after recorded delivery.
+
+## Scenario 7 — Forced Reset Restricted Gate (US5, SC-009/013)
+
+1. Give an active Member multiple sessions and assign forced reset. Before Admin success, require flag committed and all sessions/restricted authorizations revoked.
+2. Valid credentials create only a 15-minute `forced_reset` authorization and expose only `/change-password`; all shell/API/avatar routes remain inaccessible.
+3. Let authorization reach exact expiry. Require login again while flag stays true.
+4. Complete a compliant change. Require password/flag commit, all session/restricted credentials revoked, cookie clearing, and a fresh login within 2 minutes.
+5. Repeat while Member is suspended: assignment may persist, but login is rejected before credential validation.
+6. Repeat with active lockout: wait until exact lockout expiry before credentials can create the restricted authorization.
+
+## Scenario 8 — Avatar Security, Atomicity, and Private Delivery (US8, SC-008/014/019)
+
+Use fixtures for valid JPEG/PNG, spoofed MIME/extension, corrupt bytes, animated content, embedded active content, metadata, 4096×4096 and 4097×4096 boundaries, 5 MB and over-5 MB inputs, and outputs around 1 MB.
+
+1. Valid input is re-encoded, metadata removed, aspect ratio preserved, output at most 512×512 and 1 MB, and visible on the next directory/profile read.
+2. Every invalid input is rejected with a specific safe error before profile commit; prior fields/reference/file remain unchanged.
+3. Inject failure during candidate write and during DB commit. Require entire save failure, no changed fields, old avatar visible, and no partial/unreferenced candidate.
+4. Inject old-file cleanup failure after successful commit. Require new reference/file remains correct, an operations event is recorded, and reconciliation later removes only the unreferenced old file.
+5. Remove avatar; require null reference and default placeholder. Remove again; require successful no-op and no profile change.
+6. Unauthenticated avatar GET returns 401. Authenticated GET returns correct fixed type, `nosniff`, and private/no-store caching without filesystem path disclosure.
+7. Redeploy/roll back the app container and confirm the named avatar volume and referenced avatar persist.
+
+## Scenario 9 — SMTP Degradation (SC-020)
+
+1. Force SMTP rejection and timeout. Invitation UI must not claim success and must offer safe retry; reset request remains generic.
+2. Confirm secret-free operator events/health mark email degraded without recipient/token data.
+3. During outage, prove login, logout, profile reads/edits, suspend, reinstate, promote, and non-email forced-reset assignment remain usable.
+4. Restore SMTP and confirm email health returns without restarting or corrupting core state.
+5. Delay/duplicate accepted messages. Confirm expiry is unchanged, reset remains single-use/supersedable, and concurrent invitations cannot create duplicates.
+
+## Scenario 10 — Accessibility (SC-016)
+
+Run automated scans for every normal, validation-error, success, suspended, locked, rate-limited, degraded-email, invalid-token, and restricted-reset state. Require zero critical/serious findings.
+
+Then manually verify each in-scope page/state for:
+
+- keyboard-only completion and visible focus;
+- logical focus order and focus movement after error/navigation/dialog;
+- programmatic names, descriptions, required state, and linked field errors;
+- screen-reader announcement of errors/status without color dependence;
+- modal focus containment/return where applicable;
+- 200% zoom/reflow without loss of content or function.
+
+Record browser, assistive technology, viewport, tester, date, and findings. Automated success alone does not satisfy SC-016.
+
+## Scenario 11 — Credential and Logging Inspection (SC-017/018)
+
+Inspect database rows, structured logs, audit rows, analytics payloads, error captures, browser history, response headers, and outbound referrers across all prior scenarios.
+
+Require:
+
+- only hashes for full session, reset nonce, and restricted forced-reset credentials at rest;
+- no password, raw token, full token URL, profile value, recipient email, source address, or image bytes in logs/audit;
+- wrong-purpose, tampered, expired, used, superseded, and post-registration credentials all rejected;
+- every FR-059 boundary accepts final permitted and rejects first excess independently;
+- exactly one operator security event on each transition into a continuous limited state.
+
+## Scenario 12 — Coordinated Backup and Restore (FR-062)
+
+1. Create profiles with/without avatars and active/history rows, then run `ops/backup.sh`.
+2. Verify one encrypted snapshot manifest references database dump and avatar archive, checksums pass, and retention keeps 30 daily sets.
+3. Restore both into an isolated production-like environment with `ops/restore.sh`; never overwrite the source environment.
+4. Run `ops/verify-restore.sh`. Require users and referenced files agree, avatars render, and missing-file fixtures use default avatar plus a reported mismatch.
+5. Exercise application login/profile/avatar reads after restore.
+6. Record the completed restore exercise. Script/unit checks are not a quarterly production-like restore exercise by themselves.
+
+## Completion Evidence
+
+The feature is implementation-ready only after dependency approvals. It is production-ready only when automated tests, production-equivalent performance/accessibility runs, live HTTPS/SMTP behavior, Docker volume persistence, backup creation, and an isolated restore exercise all have recorded passing evidence. Report each category separately; do not infer live/operational readiness from document or fixture checks.

@@ -1,239 +1,225 @@
 # Data Model: User Role and Account Management
 
-**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-17
+**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-18
 
 ## Entity Overview
 
-| Entity | PostgreSQL Table | Purpose |
-|--------|-----------------|---------|
-| User Account + Profile | `users` | Combined account credentials and profile fields; one record per user |
-| Session | `sessions` | Opaque session tokens for authenticated users; DB-backed for revocability |
-| Password Reset Token | `password_reset_tokens` | Single-use reset tokens for self-service password recovery |
+| Entity | PostgreSQL table | Purpose |
+|--------|------------------|---------|
+| User Account + Profile | `users` | Canonical identity, password hash, current authorization state, profile, and avatar reference |
+| Authenticated Session | `sessions` | Fixed-expiry, revocable full-session token hashes |
+| Password-Reset Link | `password_reset_tokens` | Single-use, supersedable email-reset credential hashes |
+| Forced-Reset Authorization | `forced_reset_authorizations` | Fifteen-minute restricted password-change credential hashes |
+| Rate-Limit Event | `rate_limit_events` | Accepted attempts used for exact rolling-window counts |
+| Rate-Limit State | `rate_limit_states` | Current limited interval and one-event-per-transition state |
+| Audit Event | `audit_events` | Secret-free security, administrative, and operational outcomes |
 
-> **No `invitations` table**: Invitation links are stateless AES-256-GCM tokens carrying `{ email, expiresAt, purpose }`. Validity is assessed at registration time by decrypting the token, checking expiry, and confirming the email is not yet registered. No server-side invitation state is stored or revoked.
+Invitation links deliberately have no table. They are AES-256-GCM credentials containing canonical email, purpose, issuance time, and seven-day expiry. Registration validity depends on cryptographic verification plus the current unique canonical email in `users`.
 
----
+Avatar bytes deliberately do not live in PostgreSQL. `users.avatar_key` points to an immutable file under the private durable avatar volume.
 
-## `users` Table
+## `users`
 
-Stores account credentials and profile data in a single record. Role is system-assigned. Status controls login access. Lockout state (`failed_login_attempts`, `locked_until`) governs brute-force protection.
+One row combines account and profile because both have the same lifecycle and account deletion is prohibited.
 
-**File**: `lib/db/schema/users.ts`
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Stable account identifier |
+| `email` | `varchar(254)`, unique, not null | FR-049 canonical lowercase email; immutable after creation |
+| `password_hash` | text, not null | Versioned scrypt string containing algorithm parameters, salt, and derived key |
+| `role` | `admin \| member`, not null | Current role; default `member` |
+| `status` | `active \| suspended`, not null | Current access state; default `active` |
+| `first_name` | `varchar(100)`, not null | FR-046 normalized first name |
+| `last_name` | `varchar(100)`, not null | FR-046 normalized last name |
+| `phone_number` | `varchar(50)`, nullable | FR-047 normalized printable free text; blank becomes null |
+| `slack_handle` | `varchar(80)`, nullable | FR-048 normalized lowercase handle without leading `@`; blank becomes null |
+| `avatar_key` | text, nullable | Server-generated immutable file key; never a client path |
+| `force_password_reset` | boolean, not null, default false | Admin-assigned restricted-login requirement |
+| `failed_login_attempts` | positive integer, not null, default 0 | Consecutive credential failures outside an active lockout |
+| `locked_until` | timestamptz, nullable | Exact instant another login attempt becomes eligible |
+| `created_at` | timestamptz, not null | Creation time |
+| `updated_at` | timestamptz, not null | Last committed account/profile mutation |
 
-```typescript
-import { boolean, index, integer, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+**Indexes**: unique `email`; secondary `(role, status)` for active-Admin checks; optional name ordering index if measurement shows it is needed.
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  email: varchar('email', { length: 255 }).notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ['admin', 'member'] }).notNull().default('member'),
-  status: text('status', { enum: ['active', 'suspended'] }).notNull().default('active'),
-  firstName: varchar('first_name', { length: 100 }).notNull(),
-  lastName: varchar('last_name', { length: 100 }).notNull(),
-  phoneNumber: varchar('phone_number', { length: 50 }),
-  slackHandle: varchar('slack_handle', { length: 100 }),
-  avatarPath: text('avatar_path'),
-  forcePasswordReset: boolean('force_password_reset').notNull().default(false),
-  failedLoginAttempts: integer('failed_login_attempts').notNull().default(0),
-  lockedUntil: timestamp('locked_until', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index('idx_users_email').on(table.email),
-  index('idx_users_role').on(table.role),
-  index('idx_users_status').on(table.status),
-])
+### Validation
 
-export type User = typeof users.$inferSelect
-export type NewUser = typeof users.$inferInsert
+- Email uses one shared FR-049 canonicalizer before every invitation, token construction, registration, login, reset request, and lookup. Database uniqueness is over the canonical value.
+- Names trim Unicode whitespace, normalize NFC, collapse internal whitespace, permit only letters/marks/spaces/apostrophes/periods/hyphens, and contain 1–100 Unicode characters.
+- Phone trims Unicode whitespace, normalizes NFC, stores blank as null, and otherwise contains 1–50 printable non-control Unicode characters.
+- Slack handle trims, removes one optional leading `@`, lowercases ASCII, stores blank as null, and otherwise matches 1–80 characters from `[a-z0-9._-]`.
+- Password input is 8–128 characters and satisfies the specification's uppercase, lowercase, digit, and printable-special requirements. Persistence stores only a salted scrypt hash.
+- Role and status constraints are enforced both in PostgreSQL and in transition-specific application functions.
+
+### State Transitions
+
+```text
+status: active -> suspended -> active
+role: member -> admin
+force_password_reset: false -> true -> false
+lockout: eligible -> threshold failure / locked_until -> eligible at locked_until
+avatar_key: null or old immutable key -> new immutable key or null
 ```
 
-**Field notes**:
+- Suspension, reinstatement, promotion, and forced-reset assignment accept Members only and run under the account-state transaction protocol.
+- Promotion requires `status=active`, preserves full sessions, and becomes visible because each authorization check joins current `users.role`.
+- Suspension commits status and revokes full sessions before success. Reinstatement changes only status and preserves password, lockout, forced-reset flag, and history.
+- Password changes update the hash, revoke full sessions, and require a fresh login.
+- No application module exports a user deletion operation. All dependent foreign keys use `ON DELETE RESTRICT` as defense in depth.
 
-| Field | Details |
-|-------|---------|
-| `password_hash` | Format: `scrypt$16384$8$1$<hex-salt>$<hex-key>` — all params embedded |
-| `avatar_path` | Relative path within `public/avatars/`; NULL = no avatar |
-| `locked_until` | NULL = no active lockout; a past timestamp is treated as unlocked |
-| `force_password_reset` | Set TRUE by Admin (FR-027); cleared to FALSE after member completes reset (FR-029) |
+## `sessions`
 
-**Validation rules**:
-- `email`: valid email format (RFC 5322 simplified); unique; not mutable after creation
-- `first_name`, `last_name`: 1–100 characters, required at registration
-- `password_hash`: never NULL; set at registration or after reset
-- `role`: only `'admin'` or `'member'` (DB constraint enforces)
-- `status`: only `'active'` or `'suspended'`
-- `phone_number`, `slack_handle`: free-text, no format validation, nullable (FR-033)
-- `avatar_path`: validated at upload boundary (JPEG/PNG, ≤ 5 MB); path stored after file is successfully written
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Session row identifier |
+| `token_hash` | `char(64)`, unique, not null | SHA-256 of the 32-byte raw cookie token |
+| `user_id` | UUID FK `users.id`, restrict, not null | Owning user |
+| `expires_at` | timestamptz, not null | Fixed 2-hour or 21-day expiry |
+| `revoked_at` | timestamptz, nullable | Null while active; set on logout/security revocation |
+| `created_at` | timestamptz, not null | Session creation time |
 
-**State transitions**:
+**Indexes**: unique `token_hash`; `(user_id, revoked_at)` for all-session revocation; `expires_at` for pruning.
 
-```
-status:               active ←→ suspended          (Admin only; FR-013)
-role:                 member → admin               (Admin only; one-way; FR-016)
-force_password_reset: FALSE → TRUE → FALSE         (Admin sets; user clears; FR-027/029)
-locked_until:         NULL → future timestamp      (after N failures; clears when timestamp elapses)
-failed_login_attempts: increments on failure; resets to 0 on success
-```
+**Valid session predicate**: token hash matches, `revoked_at IS NULL`, and `expires_at > now`. The query joins `users` and returns current role/status/forced-reset values. A suspended user or forced-reset user cannot receive ordinary protected access even if a stale session row has not yet been pruned.
 
-**Last-Admin guard**: Application layer must reject any `DELETE` or `UPDATE status='suspended'` that would leave zero active Admin accounts (FR-017). No DB constraint can enforce this; it must be checked in the server action before the mutation.
+**Transitions**: create active; revoke current on logout; revoke all on suspension, forced-reset assignment, and any password change/reset. Expiry is fixed and never renewed.
 
----
+## `password_reset_tokens`
 
-## `sessions` Table
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Reset record identifier |
+| `user_id` | UUID FK `users.id`, restrict, not null | Target account |
+| `token_hash` | `char(64)`, unique, not null | SHA-256 of the random nonce carried inside the encrypted link credential |
+| `expires_at` | timestamptz, not null | Exactly request acceptance time plus 60 minutes |
+| `used_at` | timestamptz, nullable | Set on successful reset or supersession |
+| `created_at` | timestamptz, not null | Request acceptance / validity start time |
 
-One row per active authenticated session. Sessions are identified by an opaque random token stored in the browser cookie. Expired and revoked rows are retained until pruned; queries always filter on `is_revoked = FALSE AND expires_at > NOW()`.
+**Indexes**: unique `token_hash`; `(user_id, used_at, expires_at)` for supersession and validation.
 
-**File**: `lib/db/schema/sessions.ts`
+**Issuance transaction**: lock the user, mark every unused prior row used, insert the new row, and then attempt delivery. If delivery fails, the row remains unusable by anyone without the undelivered raw credential and the operator receives a secret-free failure event. The user-facing response remains generic.
 
-```typescript
-import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { users } from './users'
+**Completion transaction**: lock token and user; require unused and `now < expires_at`; update password; set `used_at`; revoke all full sessions and forced-reset authorizations; commit; clear flow cookie. Suspension and any unexpired login lockout remain unchanged.
 
-export const sessions = pgTable('sessions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sessionToken: text('session_token').notNull().unique(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  isRevoked: boolean('is_revoked').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index('idx_sessions_session_token').on(table.sessionToken),
-  index('idx_sessions_user_id').on(table.userId),
-  index('idx_sessions_expires_at').on(table.expiresAt),
-])
+## `forced_reset_authorizations`
 
-export type Session = typeof sessions.$inferSelect
-```
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Restricted authorization identifier |
+| `user_id` | UUID FK `users.id`, restrict, not null | Member required to change password |
+| `token_hash` | `char(64)`, unique, not null | SHA-256 of the raw restricted cookie token |
+| `expires_at` | timestamptz, not null | Creation time plus exactly 15 minutes |
+| `consumed_at` | timestamptz, nullable | Set after successful password change |
+| `revoked_at` | timestamptz, nullable | Set when replaced, suspended, or reassigned |
+| `created_at` | timestamptz, not null | Authorization creation time |
 
-**Field notes**:
+**Indexes**: unique `token_hash`; `(user_id, consumed_at, revoked_at, expires_at)`.
 
-| Field | Details |
-|-------|---------|
-| `session_token` | 64-char hex string (32 random bytes); stored as-is — sufficient entropy, not derived from user data, no need to hash |
-| `expires_at` | Fixed at creation; no sliding window; determined by whether Remember Me was selected |
-| `is_revoked` | Set TRUE on logout; allows immediate invalidation before `expires_at` |
+**Valid restricted predicate**: hash matches, not consumed/revoked, not expired, current user is active and still has `force_password_reset=true`. It authorizes only the change-password page/action.
 
-**Session durations** (set at `INSERT` time; configurable via env vars):
+## `rate_limit_events`
 
-| Mode | Formula | Default Env Var |
-|------|---------|-----------------|
-| Standard | `NOW() + INTERVAL '2 hours'` | `SESSION_DURATION_SECONDS=7200` |
-| Remember Me | `NOW() + INTERVAL '21 days'` | `REMEMBER_ME_DURATION_SECONDS=1814400` |
+Each accepted counted attempt is one row. Rejected excess attempts are not appended, so an attacker cannot extend the rolling interval by continuing to retry.
 
-**Validation query** (called in `getSession()` — never in middleware):
-```typescript
-await db
-  .select()
-  .from(sessions)
-  .innerJoin(users, eq(sessions.userId, users.id))
-  .where(
-    and(
-      eq(sessions.sessionToken, token),
-      eq(sessions.isRevoked, false),
-      gt(sessions.expiresAt, new Date()),
-    ),
-  )
-  .limit(1)
-```
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Event identifier |
+| `scope` | enum/text allowlist | `login_source`, `invite_actor`, `invite_recipient`, `reset_recipient`, `reset_source`, or `token_validation_source` |
+| `key_hash` | `char(64)`, not null | HMAC-SHA-256 pseudonym for source/recipient, or stable actor-derived key |
+| `occurred_at` | timestamptz, not null | Accepted attempt time |
 
-**Cleanup**: Expired rows accumulate; a scheduled `DELETE FROM sessions WHERE expires_at < NOW()` can prune them. Not operationally critical at ~20-user scale — lazy cleanup on first failed lookup is acceptable.
+**Index**: `(scope, key_hash, occurred_at)` supports exact rolling counts and pruning.
 
----
+| Scope | Limit | Rolling interval |
+|-------|-------|------------------|
+| `login_source` | 30 | 15 minutes |
+| `invite_actor` | 20 | 1 hour |
+| `invite_recipient` | 5 | 24 hours |
+| `reset_recipient` | 5 | 1 hour |
+| `reset_source` | 20 | 1 hour |
+| `token_validation_source` | 30 | 15 minutes |
 
-## `password_reset_tokens` Table
+Every applicable scope is checked independently. The request proceeds only when all required scopes accept it.
 
-One row per issued reset link. Only the most recently issued token per user is active; prior tokens are invalidated atomically when a new one is issued.
+## `rate_limit_states`
 
-**File**: `lib/db/schema/passwordResetTokens.ts`
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `scope` + `key_hash` | composite primary key | One current state per limit key |
+| `limited_until` | timestamptz, not null | Earliest instant the rolling count may fall below the limit |
+| `event_emitted_at` | timestamptz, nullable | Marks that the current transition event was emitted |
+| `updated_at` | timestamptz, not null | Last state evaluation |
 
-```typescript
-import { boolean, index, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
-import { users } from './users'
+Under a scope/key advisory transaction lock, the limiter deletes expired events, counts the rolling interval, appends the final permitted event, or rejects the first excess attempt. Entering a new limited interval inserts exactly one `audit_events` row; repeated denials before `limited_until` emit no duplicate transition event.
 
-export const passwordResetTokens = pgTable('password_reset_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index('idx_prt_user_id').on(table.userId),
-  index('idx_prt_token_hash').on(table.tokenHash),
-])
+## `audit_events`
 
-export type PasswordResetToken = typeof passwordResetTokens.$inferSelect
-```
+| Field | Type / constraint | Meaning |
+|-------|-------------------|---------|
+| `id` | UUID primary key | Audit identifier |
+| `category` | `security \| administration \| operations` | Event audience |
+| `action` | allowlisted text | Example: `member.suspend`, `email.invitation`, `rate_limit.entered` |
+| `outcome` | allowlisted text | `succeeded`, `rejected`, `conflict`, `degraded`, or `failed` |
+| `actor_id` | UUID FK `users.id`, restrict, nullable | Authenticated actor when applicable |
+| `target_id` | UUID FK `users.id`, restrict, nullable | Registered target when applicable |
+| `reason_code` | allowlisted text, nullable | Secret-free machine-readable reason |
+| `occurred_at` | timestamptz, not null | Commit/event time |
 
-**Field notes**:
+No raw/canonical email, source address, token, password, phone, Slack handle, profile value, image content, file path, or free-form exception payload is allowed. Runtime logs may emit the audit ID and the same allowlisted fields.
 
-| Field | Details |
-|-------|---------|
-| `token_hash` | `SHA-256(encrypted_token)` in hex — same pattern as `invitations.token_hash` |
-| `used` | Set TRUE after successful password update; prevents reuse of the same link |
+## Private Avatar Storage
 
-**Invalidation on new issuance** (FR-022): When a new reset token is issued, run both statements in a single Drizzle transaction:
-```typescript
-await db.transaction(async (tx) => {
-  await tx
-    .update(passwordResetTokens)
-    .set({ used: true })
-    .where(and(eq(passwordResetTokens.userId, userId), eq(passwordResetTokens.used, false)))
-  await tx.insert(passwordResetTokens).values({ userId, tokenHash, expiresAt })
-})
-```
+`AVATAR_STORAGE_PATH` points to a durable volume outside `.next`, `public`, and release directories. Stored names are server-generated immutable keys such as `<uuid>.jpg` or `<uuid>.png`; no user filename or path segment is retained.
 
-**Validation query at reset time**:
-```typescript
-await db
-  .select()
-  .from(passwordResetTokens)
-  .where(
-    and(
-      eq(passwordResetTokens.tokenHash, tokenHash),
-      eq(passwordResetTokens.used, false),
-      gt(passwordResetTokens.expiresAt, new Date()),
-    ),
-  )
-  .limit(1)
-```
+Replacement protocol:
 
-**Reset token expiry**: Configurable via `PASSWORD_RESET_EXPIRY_MINUTES` env var (suggested default: 60 minutes — not specified in the original spec but standard practice).
+1. Bound transport at just over 5 MB and reject an input over 5 MB.
+2. Decode content; reject invalid, mismatched, animated, active, or over-4096×4096 input.
+3. Normalize orientation, remove metadata through re-encoding, resize within 512×512 preserving aspect ratio, and require output at most 1 MB.
+4. Write and fsync a new immutable candidate on the durable volume.
+5. Begin DB transaction, lock target user, re-authorize current actor/target state, validate all profile values, update fields and `avatar_key`, then commit.
+6. If validation/write/commit fails, delete the candidate and preserve the old row/file. After commit, delete the previous file. If cleanup fails, record an operations event and let reconciliation remove the unreferenced file later.
 
----
+Removal of a null avatar is a successful no-op. Avatar reads resolve the current key from the DB and stream through an authenticated Route Handler with `Cache-Control: private, no-store` and a detected fixed `Content-Type`.
 
-## Cross-Entity Constraints Summary
+## Transaction and Concurrency Rules
 
-| Rule | Where Enforced |
-|------|---------------|
-| At least one active Admin must exist | Application layer (server action pre-check before delete/suspend) |
-| No invitation for email with existing account | Application pre-check in `sendInvitation` before token generation |
-| Sessions cascade on user delete | `ON DELETE CASCADE` on `sessions.user_id` |
-| Reset tokens cascade on user delete | `ON DELETE CASCADE` on `password_reset_tokens.user_id` |
-| Suspended account check before lockout increment | Application logic (login server action) |
-| Role field is read-only via profile edit | Application layer (server action ignores role field in profile update) |
+| Workflow | Serialization / invariant |
+|----------|---------------------------|
+| Initial Admin bootstrap | Global bootstrap advisory lock; empty inserts exactly one; active Admin no-op; non-empty/no active Admin fails |
+| Invitation registration | Canonical-email advisory lock plus unique `users.email`; winner creates one user and session, while a loser creates neither |
+| Suspend/reinstate/promote/force reset | Account-state advisory lock plus target `FOR UPDATE`; eligibility re-read inside transaction |
+| Active-Admin invariant | Global account-state lock and current `(role,status)` count in bootstrap and relevant state mutations |
+| Reset issuance | User row lock; prior unused reset rows superseded before new insert |
+| Reset/forced-reset completion | Credential and user locks; password, flags, credential consumption, and session revocation commit together |
+| Profile/avatar save | Target row lock; all profile fields and avatar reference commit together after durable candidate write |
+| Rate-limit evaluation | Scope/key advisory lock; exact rolling count and state/audit transition commit together |
 
----
+## Retention and Cleanup
 
-## Environment Variables Reference
+- User/profile data and canonical-email ownership are retained indefinitely while the account exists; application deletion is unsupported.
+- Expired/revoked sessions, used reset credentials, consumed restricted authorizations, and rate-limit events are pruned by an idempotent maintenance job after their operational/audit need ends.
+- `audit_events` retention is an operator policy; records contain only the bounded fields above.
+- Unreferenced avatar candidates older than the safety interval are reconciled and removed; referenced files are never removed by the reconciler.
+- Daily encrypted PostgreSQL/avatar snapshot sets are retained for 30 days. A quarterly production-like restore verifies checksums, references, missing-file fallback, and operator reporting.
 
-| Env Var | Default | Used In |
-|---------|---------|---------|
-| `DATABASE_URL` | — (required) | `lib/db/index.ts` |
-| `DATABASE_URL_TEST` | — (test only) | `lib/db/index.ts` |
-| `SESSION_DURATION_SECONDS` | `7200` | `lib/auth/session.ts` |
-| `REMEMBER_ME_DURATION_SECONDS` | `1814400` | `lib/auth/session.ts` |
-| `INVITATION_SECRET_KEY` | — (required, 64 hex chars = 32 bytes) | `lib/crypto/token.ts` |
-| `INVITATION_EXPIRY_DAYS` | `7` | `app/actions/invitations.ts` |
-| `PASSWORD_RESET_EXPIRY_MINUTES` | `60` | `app/actions/password.ts` |
-| `LOGIN_MAX_ATTEMPTS` | `5` | `app/actions/auth.ts` |
-| `LOGIN_LOCKOUT_SECONDS` | `900` | `app/actions/auth.ts` |
-| `SMTP_HOST` | — (required) | `lib/email/sender.ts` |
-| `SMTP_PORT` | `587` | `lib/email/sender.ts` |
-| `SMTP_USER` | — (required) | `lib/email/sender.ts` |
-| `SMTP_PASS` | — (required) | `lib/email/sender.ts` |
-| `SMTP_FROM` | — (required) | `lib/email/sender.ts` |
-| `INITIAL_ADMIN_EMAIL` | — (required at boot) | Bootstrap / seed script |
-| `INITIAL_ADMIN_PASSWORD` | — (required at boot) | Bootstrap / seed script |
+## Environment and Deployment Inputs
+
+| Variable | Requirement / use |
+|----------|-------------------|
+| `DATABASE_URL` | Required PostgreSQL connection |
+| `DATABASE_URL_TEST` | Required isolated integration-test database |
+| `APP_ORIGIN` | Required validated HTTPS origin used to build email links; never derive from `Host` |
+| `TOKEN_ENCRYPTION_KEY` | Required 32-byte secret for AES-256-GCM link credentials |
+| `RATE_LIMIT_HASH_KEY` | Required secret for HMAC pseudonyms/advisory keys |
+| `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Stable self-hosted Next.js Server Action key |
+| `LOGIN_MAX_ATTEMPTS` | Positive integer; default `5` |
+| `LOGIN_LOCKOUT_MINUTES` | Positive whole minutes; default `15` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | Required SMTP configuration; default port `587` |
+| `SMTP_USER`, `SMTP_PASS` | Optional only as a pair when the SMTP service requires authentication |
+| `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Required and validated only when `users` is empty |
+| `INITIAL_ADMIN_FIRST_NAME`, `INITIAL_ADMIN_LAST_NAME` | Required FR-046 profile values only when `users` is empty |
+| `AVATAR_STORAGE_PATH` | Required writable durable-volume path; must not be under `public` or release directories |
+| `BACKUP_ENCRYPTION_KEY_FILE` | Required by operations backup/restore scripts, not exposed to the browser |
+
+Compose must mount the avatar volume at `AVATAR_STORAGE_PATH`, keep the app reachable only through Traefik, and keep PostgreSQL on the internal network in production. Migration execution remains an explicit deployment prerequisite before application startup/bootstrap.

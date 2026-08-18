@@ -1,123 +1,68 @@
 # Proxy Contract: User Role and Account Management
 
-**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-17
+**Feature**: `001-user-role-management` | **Phase**: 1 | **Date**: 2026-08-18
 
-> **Next.js 16 rename**: The `middleware.ts` file convention is deprecated in Next.js 16 and renamed to `proxy.ts`. The exported function changes from `middleware()` to `proxy()`. The runtime changes from Edge to **Node.js** by default.
+Next.js 16 uses root `proxy.ts` and a named `proxy()` export in the Node.js runtime. Proxy is a fast routing layer, not the session or authorization authority.
 
-## Overview
+## Cookie Names
 
-`proxy.ts` enforces route-level access control. It runs in the **Node.js runtime** (Next.js 16 default). Despite Node.js runtime availability, Proxy is limited to cookie-presence checks — it does not perform DB validation because Next.js docs explicitly state Proxy "is _not_ intended for slow data fetching" and should not be used as a full auth solution.
+| Cookie | Purpose | Proxy interpretation |
+|--------|---------|----------------------|
+| `session` | Full authenticated session raw token | Presence hint for protected/auth route routing |
+| `invitation_flow` | Scrubbed invitation credential | Presence hint for `/register` only |
+| `password_reset_flow` | Scrubbed self-service reset credential | Presence hint for reset form only |
+| `forced_reset` | Restricted forced-reset raw token | Presence hint for `/change-password` only |
 
-Proxy role:
-1. Check for the presence of the session cookie (not validating it against the DB)
-2. Redirect unauthenticated requests to `/login`
-3. Redirect authenticated requests away from auth pages
-
-Full DB session validation (checking `is_revoked`, `expires_at`, user status) is the responsibility of `getSession()` in `lib/auth/session.ts`, called inside Server Components and Server Actions.
-
----
+All cookies are Secure, HttpOnly, SameSite=Lax, and path-limited to the narrowest useful path. Proxy never decrypts, hashes, queries, or trusts their contents.
 
 ## Route Classification
 
-| Pattern | Route Group | Proxy Behavior |
-|---------|-------------|----------------|
-| `/login`, `/register`, `/reset-password`, `/change-password` | `(auth)` — public | Skip auth check. If session cookie is present, redirect to `/users`. |
-| `/users/*`, `/admin/*` | `(shell)` — protected | If no session cookie, redirect to `/login`. |
-| `/api/avatar` | API — protected | If no session cookie, return `401 Unauthorized`. |
-| `/_next/*`, `/avatars/*`, `favicon.ico` | Static | Always skip — no auth check. |
+| Route | Cookie-presence behavior |
+|-------|--------------------------|
+| `/login` | Always continue; the page validates any cookies against PostgreSQL before redirecting |
+| `/register` | Continue only when `invitation_flow` exists; otherwise render/redirect to invalid invitation state |
+| `/reset-password` | Always continue; page selects request or completion state from validated flow |
+| `/change-password` | Continue only when `forced_reset` exists; otherwise redirect `/login` |
+| `/auth/invitation`, `/auth/password-reset` | Always continue so Route Handler can validate/scrub token |
+| `/users/:path*`, `/admin/:path*` | Missing full cookie -> `/login?from=<safe relative path>`; otherwise continue |
+| `/api/users/:id/avatar` | Missing full cookie -> JSON `401`; otherwise continue |
+| `/api/health` | Continue; Route Handler exposes only bounded health data |
+| `/_next/static/:path*`, `/_next/image/:path*`, favicon/static shell assets | Skip Proxy |
 
----
+There is no public `/avatars` path. Avatar files are outside `public` and cannot be excluded as static assets.
 
-## Matcher Configuration
+## Matcher
 
-```typescript
-export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|avatars/).*)',
-  ],
-}
-```
+The constant matcher includes application pages, Server Action host routes, auth token-intake routes, and protected APIs while excluding only framework/static shell assets. Changes to page placement must be accompanied by Proxy coverage tests because Server Actions are POSTs to the page route where they are used.
 
-The matcher excludes Next.js internals and the `public/avatars/` static path. All other routes are processed by the proxy function.
+## Authoritative Guards
 
----
+### `getSession()`
 
-## Proxy Logic
+1. Read `session` via `await cookies()`.
+2. Hash the raw value with SHA-256.
+3. Query `sessions JOIN users` for matching hash, `revoked_at IS NULL`, and `expires_at > now`.
+4. Read current user role, status, and forced-reset flag from the joined row.
+5. If missing/expired/revoked, return null. Server Components do not mutate cookies; the next Server Action/Route Handler overwrites or clears stale values.
+6. If suspended, revoke the session if needed and return the explicit suspended outcome only to the login boundary; protected boundaries return unauthenticated.
+7. If forced reset is true, revoke the full session and deny full access. The credential-authentication action later clears the stale cookie and creates only a restricted authorization.
+8. Return a constrained context containing IDs and current authorization state; never return password/token/profile secrets.
 
-```
-export function proxy(request: NextRequest):
-  path = request.nextUrl.pathname
+### `requireSession()`
 
-  if path matches static exclusions:
-    return NextResponse.next()
+Calls `getSession()`. On null, protected pages redirect to `/login`; Server Actions/Route Handlers return a bounded unauthorized result. It is called at the top of every protected page, action, and avatar handler.
 
-  sessionCookie = request.cookies.get('session')
-  isAuthRoute = path starts with /login, /register, /reset-password, /change-password
+### `requireAdmin()`
 
-  if isAuthRoute:
-    if sessionCookie exists:
-      redirect to /users
-    else:
-      return NextResponse.next()
+Calls `requireSession()` and checks the current joined role. A Member receives a bounded forbidden result/redirect. Promotion therefore affects existing valid sessions on their next request without session replacement.
 
-  // Protected route
-  if sessionCookie is absent:
-    if path starts with /api/:
-      return 401 JSON response
-    else:
-      redirect to /login?from=<encoded-path>
-  else:
-    return NextResponse.next()
-    // DB validation happens in getSession() inside the Server Component/Action
-```
+### `requireForcedReset()`
 
----
+Reads and hashes only the `forced_reset` cookie, joins `forced_reset_authorizations` to current `users`, and requires unconsumed/unrevoked/unexpired authorization, active Member status, and `force_password_reset=true`. It authorizes only `/change-password` and `completeForcedPasswordReset`.
 
-## `getSession()` Contract
+## Security Headers and Token Hygiene
 
-**File**: `lib/auth/session.ts`
-
-**Called from**: All protected Server Components (at the top, before rendering) and all authenticated Server Actions (at the top, before any mutation).
-
-**Behavior**:
-1. `const cookieStore = await cookies()` — async in Next.js 16
-2. `const token = cookieStore.get('session')?.value`
-3. If no token → return `null`
-4. Query `sessions JOIN users` via Drizzle WHERE `session_token = token AND is_revoked = FALSE AND expires_at > NOW()`
-5. If no row → return `null` (session expired or revoked)
-6. If `user.status = 'suspended'` → revoke the session, clear the cookie, return `null`
-7. Return `{ userId, email, role, forcePasswordReset, ... }` session context object
-
-**Force-password-reset interception**: If the returned session context has `forcePasswordReset = TRUE`, protected Server Components (except `/change-password`) redirect to `/change-password`. This check is implemented as a helper `requireSession()` in `lib/auth/guards.ts` so it is not duplicated across every page.
-
----
-
-## `requireAdmin()` Contract
-
-**File**: `lib/auth/guards.ts`
-
-**Called from**: Server Actions and Server Components that require Admin role.
-
-**Behavior**:
-1. Call `getSession()`
-2. If null → throw `Unauthorized` (or redirect to `/login`)
-3. If `session.role !== 'admin'` → throw `Forbidden` (or redirect to `/users` with an error)
-4. Return the session context
-
----
-
-## Cookie Specification
-
-| Attribute | Value |
-|-----------|-------|
-| Name | `session` |
-| Value | 64-char hex session token |
-| `HttpOnly` | Yes (not accessible to JavaScript) |
-| `Secure` | Yes (HTTPS only) |
-| `SameSite` | `Lax` |
-| `Path` | `/` |
-| `Expires` | Matches `sessions.expires_at` |
-
-**Setting the cookie**: Server Action via `cookieStore.set(...)` using `next/headers`.
-
-**Clearing the cookie**: Server Action via `cookieStore.delete('session')` or `set('session', '', { maxAge: 0 })`.
+- Token-intake responses set `Referrer-Policy: no-referrer`, the narrow flow cookie, and an immediate clean-URL redirect.
+- Protected pages and avatar responses use private/no-store caching as appropriate.
+- Proxy logging, errors, and redirects never copy query strings containing credentials. The `from` parameter is a validated same-origin relative path without sensitive query data.
+- Every Server Action independently authenticates, authorizes, validates, and rate-limits; Proxy coverage is defense in depth only.
