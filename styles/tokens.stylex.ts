@@ -172,3 +172,17 @@ export const layout = stylex.defineVars({
   contentMax: "760px",
   focusRingWidth: "2px",
 });
+
+export const structure = stylex.defineVars({
+  block: "block",
+  flex: "flex",
+  grid: "grid",
+  none: "none",
+  widthFull: "100%",
+  minHeightScreen: "100vh",
+  auto: "auto",
+  borderSolid: "solid",
+  alignCenter: "center",
+  justifyBetween: "space-between",
+  cover: "cover",
+});

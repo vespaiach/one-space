@@ -13,6 +13,8 @@ The server must have:
 - Docker Engine and Docker Compose
 - Ports 80 and 443 open to the internet
 - A DNS record pointing the application domain to the server
+- An SMTP endpoint and sender authorized for transactional email
+- A host backup directory and a 32-byte-or-longer backup passphrase file owned by UID/GID `1001:1001`
 
 Do not install Traefik separately. The deployment script starts the Traefik
 service defined in `docker-compose.yml`.
@@ -105,6 +107,28 @@ APP_DOMAIN=app.example.com
 POSTGRES_USER=one_space
 POSTGRES_PASSWORD=replace-with-a-strong-password
 POSTGRES_DB=one_space
+
+DATABASE_URL=postgres://one_space:replace-with-a-strong-password@postgres:5432/one_space
+APP_ORIGIN=https://app.example.com
+TOKEN_ENCRYPTION_KEY=replace-with-64-random-hex-characters
+RATE_LIMIT_HASH_KEY=replace-with-an-independent-random-secret
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=replace-with-a-stable-random-secret
+
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_FROM=One Space <no-reply@example.com>
+SMTP_USER=
+SMTP_PASS=
+
+INITIAL_ADMIN_EMAIL=admin@example.com
+INITIAL_ADMIN_PASSWORD=replace-with-a-policy-compliant-password
+INITIAL_ADMIN_FIRST_NAME=Initial
+INITIAL_ADMIN_LAST_NAME=Admin
+
+AVATAR_STORAGE_PATH=/var/lib/one-space/avatars
+BACKUP_ENCRYPTION_KEY_FILE=/run/secrets/one-space-backup-key
+BACKUP_ENCRYPTION_KEY_FILE_HOST=/opt/one-space/secrets/backup.key
+BACKUP_DIR_HOST=/opt/one-space/backups
 ```
 
 `APP_DOMAIN` must be a hostname only. Do not include `https://`, a port, a path,
@@ -118,6 +142,15 @@ Protect the environment file:
 ```sh
 chmod 600 /opt/one-space/.env
 ```
+
+Create the operations paths without placing the encryption key in the repository:
+
+```sh
+install -d -m 700 -o 1001 -g 1001 /opt/one-space/backups /opt/one-space/secrets
+openssl rand -base64 48 | install -m 600 -o 1001 -g 1001 /dev/stdin /opt/one-space/secrets/backup.key
+```
+
+Keep `TOKEN_ENCRYPTION_KEY`, `RATE_LIMIT_HASH_KEY`, and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` stable across deployments. Rotating the token-encryption key invalidates outstanding invitation and password-reset links. Remove the `INITIAL_ADMIN_*` values after the first Admin is created; startup refuses an empty database without them and refuses an existing database with no active Admin.
 
 ## 6. Authenticate to Docker Hub
 
@@ -147,6 +180,8 @@ The script:
 - Pulls the Traefik and configured application images
 - Starts or updates `traefik`, `postgres`, and `app`
 
+The application runs committed Drizzle migrations before its startup Admin invariant check. A migration or invariant failure keeps the new application container unhealthy instead of serving against an incompatible schema. Back up before deployment and inspect application logs for migration completion or failure.
+
 ## 8. Verify the deployment
 
 Inspect the application and Traefik logs:
@@ -160,6 +195,7 @@ Verify the public endpoint:
 
 ```sh
 curl -fsSI https://app.example.com/
+curl -fsS https://app.example.com/api/health
 ```
 
 Replace `app.example.com` with the value of `APP_DOMAIN`.
@@ -183,6 +219,14 @@ cd /opt/one-space
 docker compose logs --tail=100 app
 ```
 
+Run a coordinated encrypted database/avatar backup before and after the rollout:
+
+```sh
+docker compose --profile operations run --rm backup
+```
+
+The command writes an encrypted snapshot, manifest, and ciphertext checksum beneath `BACKUP_DIR_HOST`. It retains daily artifacts for 30 days. Schedule it at least daily with the host scheduler and alert on non-zero exit.
+
 ## Roll back
 
 Change `APP_IMAGE` in `.env` to the previous version or its immutable
@@ -194,15 +238,29 @@ cd /opt/one-space
 docker compose logs --tail=100 app
 ```
 
+Rollback changes only the application image. The named `avatar_data` and `postgres_data` volumes remain attached and are never replaced by a release checkout. Do not roll back across an incompatible database migration until the release-specific data rollback procedure has been reviewed and tested.
+
+## Isolated restore exercise
+
+At least quarterly, restore the database and avatar archive together into an isolated production-like database and empty avatar directory. Never point the restore service at the source database or live avatar directory.
+
+1. Start an isolated PostgreSQL target on the internal network and create an empty database.
+2. Set `RESTORE_DATABASE_URL`, `RESTORE_SNAPSHOT_FILE`, `RESTORE_AVATAR_STORAGE_PATH_HOST`, and `ALLOW_ISOLATED_RESTORE=yes` only for the exercise.
+3. Ensure the restore avatar directory is empty and owned by UID/GID `1001:1001`.
+4. Run `docker compose --profile operations run --rm restore`.
+5. Start the application against the restored database/avatar directory and exercise login, directory, profile, and avatar reads.
+6. Record snapshot ID, image SHA tag, operator, date, checksum result, reference mismatches, application checks, and cleanup.
+
+`ops/verify-restore.sh` reports missing referenced files; the application returns its default-avatar outcome for those records. A script test or checksum-only run is not a production-like restore exercise.
+
 ## Production notes
 
-- The current Compose file publishes PostgreSQL on host port 5432. Remove that
-  port mapping or block port 5432 with the server firewall before production.
-- Back up the `postgres_data` Docker volume regularly and test restoration.
+- PostgreSQL is reachable only on the internal Compose network; do not add a host port mapping.
+- Avatar files live on the named `avatar_data` volume outside release directories. The `avatar-init` one-shot service establishes runtime ownership before the app starts.
+- Monitor backup exit status, backup age, disk capacity, `/api/health`, SMTP degradation, and operations audit events. Test alert delivery rather than inferring it from configuration.
 - Back up `traefik/acme.json` securely. It contains ACME account and certificate
   data and must not be committed to Git.
-- The runtime image does not currently include a database migration command.
-  Database schema changes require a separate migration procedure before the new
-  application version can be considered deployed.
 - Keep Docker Hub deployment credentials read-only on the server. The server
   needs permission to pull images, not publish them.
+
+This guide and static Compose validation do not prove live HTTPS cookie behavior, SMTP acceptance/recovery, Docker volume persistence through an actual redeploy, backup creation, alert delivery, or isolated restoration. Production readiness requires separately recorded live evidence for each category.

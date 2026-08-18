@@ -23,12 +23,12 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 **Purpose**: Resolve constitutional gates and prepare dependencies, configuration, and isolated test infrastructure.
 
-- [ ] T001 Obtain feature-owner decisions for GOV-003, GOV-004, and GOV-005 and record each Approved or Rejected outcome in specs/001-user-role-management/governance.md before adding or importing its package
-- [ ] T002 Update package.json and package-lock.json with approved nodemailer runtime support and only the dependencies approved by T001, including sharp, axe-core, and @types/nodemailer when their governance status is Approved
-- [ ] T003 [P] Document and validate the complete feature environment contract in .env.example and lib/config/env.ts, including isolated DATABASE_URL_TEST and private AVATAR_STORAGE_PATH safeguards
-- [ ] T004 [P] Add test:integration and test:accessibility commands plus feature test include/exclude rules in package.json and vitest.config.mts
-- [ ] T005 [P] Create shared Vitest setup, deterministic clock helpers, and test-only environment builders in tests/setup.ts and tests/helpers/environment.ts
-- [ ] T006 Create isolated PostgreSQL lifecycle helpers that refuse inherited, development, or production databases in tests/helpers/database.ts
+- [X] T001 Obtain feature-owner decisions for GOV-003, GOV-004, and GOV-005 and record each Approved or Rejected outcome in specs/001-user-role-management/governance.md before adding or importing its package
+- [X] T002 Update package.json and package-lock.json with approved nodemailer runtime support and only the dependencies approved by T001, including sharp, axe-core, and @types/nodemailer when their governance status is Approved
+- [X] T003 [P] Document and validate the complete feature environment contract in .env.example and lib/config/env.ts, including isolated DATABASE_URL_TEST and private AVATAR_STORAGE_PATH safeguards
+- [X] T004 [P] Add test:integration and test:accessibility commands plus feature test include/exclude rules in package.json and vitest.config.mts
+- [X] T005 [P] Create shared Vitest setup, deterministic clock helpers, and test-only environment builders in tests/setup.ts and tests/helpers/environment.ts
+- [X] T006 Create isolated PostgreSQL lifecycle helpers that refuse inherited, development, or production databases in tests/helpers/database.ts
 
 **Checkpoint**: Dependency decisions are explicit, the approved dependency set is installed, and tests cannot mutate a non-isolated database.
 
@@ -40,28 +40,28 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 **CRITICAL**: No user story implementation begins until this phase passes its tests.
 
-- [ ] T007 [P] Write failing schema constraint and relation tests for all seven entities, canonical email uniqueness, state enums, and ON DELETE RESTRICT behavior in tests/integration/db/schema.test.ts
-- [ ] T008 Define users, sessions, password_reset_tokens, forced_reset_authorizations, rate_limit_events, rate_limit_states, and audit_events with indexes and relations in lib/db/schema/users.ts, lib/db/schema/auth.ts, lib/db/schema/rate-limit.ts, lib/db/schema/audit.ts, and lib/db/schema/index.ts
-- [ ] T009 Generate and review the PostgreSQL migration for the complete feature schema in drizzle/ and verify it against DATABASE_URL_TEST
-- [ ] T010 [P] Write failing FR-046–FR-049 boundary tests for names, phone numbers, Slack handles, email canonicalization, and password policy in tests/unit/validation/profile.test.ts and tests/unit/validation/credentials.test.ts
-- [ ] T011 Implement dependency-free profile, email, and password normalizers and validators in lib/validation/profile.ts and lib/validation/credentials.ts
-- [ ] T012 [P] Write failing password-hash tests for encoded scrypt parameters, timing-safe verification, dummy unknown-account work, and upgrade detection in tests/unit/auth/password.test.ts
-- [ ] T013 Implement asynchronous versioned scrypt hashing and verification with the approved OWASP parameters in lib/auth/password.ts
-- [ ] T014 [P] Write failing credential tests for randomness, purpose binding, AES-256-GCM tamper detection, SHA-256 token hashing, exact expiry, and wrong-purpose rejection in tests/unit/crypto/credentials.test.ts
-- [ ] T015 Implement invitation/reset encrypted envelopes and opaque session/restricted-token helpers in lib/crypto/credentials.ts
-- [ ] T016 [P] Write failing PostgreSQL integration tests for fixed 2-hour/21-day sessions, current-user joins, per-session/all-session revocation, suspension/forced-reset denial, and requireSession/requireAdmin/requireForcedReset outcomes in tests/integration/auth/sessions.test.ts
-- [ ] T017 Implement session creation, lookup, current-data authorization context, and revocation queries in lib/db/queries/sessions.ts and lib/auth/session.ts
-- [ ] T018 Implement requireSession, requireAdmin, and requireForcedReset authoritative guards with bounded outcomes in lib/auth/guards.ts
-- [ ] T019 [P] Write failing rolling-window boundary tests for every FR-059 scope and one-event-per-limited-state behavior in tests/integration/rate-limit/rate-limiter.test.ts
-- [ ] T020 [P] Implement allowlisted, secret-free audit persistence and runtime event projection in lib/audit/events.ts
-- [ ] T021 Implement advisory-lock-based rolling limits, HMAC pseudonyms, state transitions, and pruning in lib/rate-limit/rate-limiter.ts and lib/db/queries/rate-limits.ts
-- [ ] T022 [P] Write failing SMTP adapter tests for acceptance, rejection, timeout, delayed/duplicate delivery, typed configuration, and recipient/token-free diagnostics in tests/unit/email/smtp.test.ts
-- [ ] T023 Implement the approved Nodemailer SMTP adapter, invitation/reset message builders, and capability state in lib/email/smtp.ts and lib/email/messages.ts
-- [ ] T024 [P] Define reusable token-only StyleX foundations for forms, status messages, focus states, shell layout, and default avatars in styles/tokens.stylex.ts, components/ui/form-field.tsx, components/ui/status-message.tsx, and components/ui/shell.tsx
-- [ ] T025 [P] Write failing Proxy coverage tests for public, flow-cookie, protected page, Server Action host, avatar API, health, and static routes in tests/unit/proxy.test.ts
-- [ ] T026 Implement cookie-presence routing only, safe relative return paths, and the complete matcher in proxy.ts
-- [ ] T027 Configure the Server Action body limit just above 5 MB and required security/runtime settings in next.config.ts
-- [ ] T028 Write failing capability tests in tests/integration/http/health.test.ts, then implement bounded database/email health reporting with no secret disclosure in app/api/health/route.ts
+- [X] T007 [P] Write failing schema constraint and relation tests for all seven entities, canonical email uniqueness, state enums, and ON DELETE RESTRICT behavior in tests/integration/db/schema.test.ts
+- [X] T008 Define users, sessions, password_reset_tokens, forced_reset_authorizations, rate_limit_events, rate_limit_states, and audit_events with indexes and relations in lib/db/schema/users.ts, lib/db/schema/auth.ts, lib/db/schema/rate-limit.ts, lib/db/schema/audit.ts, and lib/db/schema/index.ts
+- [X] T009 Generate and review the PostgreSQL migration for the complete feature schema in drizzle/ and verify it against DATABASE_URL_TEST
+- [X] T010 [P] Write failing FR-046–FR-049 boundary tests for names, phone numbers, Slack handles, email canonicalization, and password policy in tests/unit/validation/profile.test.ts and tests/unit/validation/credentials.test.ts
+- [X] T011 Implement dependency-free profile, email, and password normalizers and validators in lib/validation/profile.ts and lib/validation/credentials.ts
+- [X] T012 [P] Write failing password-hash tests for encoded scrypt parameters, timing-safe verification, dummy unknown-account work, and upgrade detection in tests/unit/auth/password.test.ts
+- [X] T013 Implement asynchronous versioned scrypt hashing and verification with the approved OWASP parameters in lib/auth/password.ts
+- [X] T014 [P] Write failing credential tests for randomness, purpose binding, AES-256-GCM tamper detection, SHA-256 token hashing, exact expiry, and wrong-purpose rejection in tests/unit/crypto/credentials.test.ts
+- [X] T015 Implement invitation/reset encrypted envelopes and opaque session/restricted-token helpers in lib/crypto/credentials.ts
+- [X] T016 [P] Write failing PostgreSQL integration tests for fixed 2-hour/21-day sessions, current-user joins, per-session/all-session revocation, suspension/forced-reset denial, and requireSession/requireAdmin/requireForcedReset outcomes in tests/integration/auth/sessions.test.ts
+- [X] T017 Implement session creation, lookup, current-data authorization context, and revocation queries in lib/db/queries/sessions.ts and lib/auth/session.ts
+- [X] T018 Implement requireSession, requireAdmin, and requireForcedReset authoritative guards with bounded outcomes in lib/auth/guards.ts
+- [X] T019 [P] Write failing rolling-window boundary tests for every FR-059 scope and one-event-per-limited-state behavior in tests/integration/rate-limit/rate-limiter.test.ts
+- [X] T020 [P] Implement allowlisted, secret-free audit persistence and runtime event projection in lib/audit/events.ts
+- [X] T021 Implement advisory-lock-based rolling limits, HMAC pseudonyms, state transitions, and pruning in lib/rate-limit/rate-limiter.ts and lib/db/queries/rate-limits.ts
+- [X] T022 [P] Write failing SMTP adapter tests for acceptance, rejection, timeout, delayed/duplicate delivery, typed configuration, and recipient/token-free diagnostics in tests/unit/email/smtp.test.ts
+- [X] T023 Implement the approved Nodemailer SMTP adapter, invitation/reset message builders, and capability state in lib/email/smtp.ts and lib/email/messages.ts
+- [X] T024 [P] Define reusable token-only StyleX foundations for forms, status messages, focus states, shell layout, and default avatars in styles/tokens.stylex.ts, components/ui/form-field.tsx, components/ui/status-message.tsx, and components/ui/shell.tsx
+- [X] T025 [P] Write failing Proxy coverage tests for public, flow-cookie, protected page, Server Action host, avatar API, health, and static routes in tests/unit/proxy.test.ts
+- [X] T026 Implement cookie-presence routing only, safe relative return paths, and the complete matcher in proxy.ts
+- [X] T027 Configure the Server Action body limit just above 5 MB and required security/runtime settings in next.config.ts
+- [X] T028 Write failing capability tests in tests/integration/http/health.test.ts, then implement bounded database/email health reporting with no secret disclosure in app/api/health/route.ts
 
 **Checkpoint**: Shared boundaries pass in isolation; story work can start from stable schema, security, and test fixtures.
 
@@ -75,18 +75,18 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 1
 
-- [ ] T029 [P] [US1] Write failing invitation action tests for Admin authorization, canonical eligibility, dual rate limits, SMTP acceptance/failure, fresh seven-day links, and the FR-063 warning in tests/integration/actions/invitations.test.ts
-- [ ] T030 [P] [US1] Write failing invitation intake Route Handler tests for token scrubbing, no-referrer responses, narrow flow cookies, expiry, tampering, wrong purpose, and post-registration rejection in tests/integration/http/invitation-intake.test.ts
-- [ ] T031 [P] [US1] Write failing registration tests for password/name validation, Member assignment, fixed two-hour session creation, cookie clearing, and concurrent canonical-email winners in tests/integration/actions/register.test.ts
-- [ ] T032 [P] [US1] Write failing component tests for the invitation and registration normal, error, rate-limited, degraded-email, and success states in tests/unit/components/invitation-registration.test.tsx
+- [X] T029 [P] [US1] Write failing invitation action tests for Admin authorization, canonical eligibility, dual rate limits, SMTP acceptance/failure, fresh seven-day links, and the FR-063 warning in tests/integration/actions/invitations.test.ts
+- [X] T030 [P] [US1] Write failing invitation intake Route Handler tests for token scrubbing, no-referrer responses, narrow flow cookies, expiry, tampering, wrong purpose, and post-registration rejection in tests/integration/http/invitation-intake.test.ts
+- [X] T031 [P] [US1] Write failing registration tests for password/name validation, Member assignment, fixed two-hour session creation, cookie clearing, and concurrent canonical-email winners in tests/integration/actions/register.test.ts
+- [X] T032 [P] [US1] Write failing component tests for the invitation and registration normal, error, rate-limited, degraded-email, and success states in tests/unit/components/invitation-registration.test.tsx
 
 ### Implementation for User Story 1
 
-- [ ] T033 [US1] Implement requireAdmin-protected stateless invitation delivery and acceptance-only success semantics in app/actions/invitations.ts
-- [ ] T034 [US1] Implement invitation credential intake, validation-failure limiting, narrow cookie issuance, and clean redirect in app/auth/invitation/route.ts
-- [ ] T035 [US1] Implement canonical-email-locked atomic Member registration with winner-only session creation in app/actions/auth.ts and lib/db/queries/registration.ts
-- [ ] T036 [P] [US1] Build the Admin invitation form with capability status and mandatory non-revocation copy in components/auth/invitation-form.tsx and app/(shell)/admin/invitations/page.tsx
-- [ ] T037 [P] [US1] Build the accessible single-step registration form and invalid-link state in components/auth/registration-form.tsx and app/(auth)/register/page.tsx
+- [X] T033 [US1] Implement requireAdmin-protected stateless invitation delivery and acceptance-only success semantics in app/actions/invitations.ts
+- [X] T034 [US1] Implement invitation credential intake, validation-failure limiting, narrow cookie issuance, and clean redirect in app/auth/invitation/route.ts
+- [X] T035 [US1] Implement canonical-email-locked atomic Member registration with winner-only session creation in app/actions/auth.ts and lib/db/queries/registration.ts
+- [X] T036 [P] [US1] Build the Admin invitation form with capability status and mandatory non-revocation copy in components/auth/invitation-form.tsx and app/(shell)/admin/invitations/page.tsx
+- [X] T037 [P] [US1] Build the accessible single-step registration form and invalid-link state in components/auth/registration-form.tsx and app/(auth)/register/page.tsx
 - [ ] T038 [US1] Execute and record Quickstart Scenario 2 evidence for SC-001, SC-002, SC-017, SC-018, and SC-020 in specs/001-user-role-management/evidence/us1-invitation-registration.md
 
 **Checkpoint**: Invitation registration works independently with an Admin fixture and cannot create an account without a valid invitation.
@@ -101,14 +101,14 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 2
 
-- [ ] T039 [P] [US2] Write failing integration tests for empty-valid, empty-invalid, existing-active-Admin, non-empty-without-active-Admin, changed-config, and concurrent bootstrap states in tests/integration/bootstrap/initial-admin.test.ts
-- [ ] T040 [P] [US2] Write failing instrumentation registration tests for Node-only execution and readiness-blocking error propagation in tests/unit/instrumentation.test.ts
+- [X] T039 [P] [US2] Write failing integration tests for empty-valid, empty-invalid, existing-active-Admin, non-empty-without-active-Admin, changed-config, and concurrent bootstrap states in tests/integration/bootstrap/initial-admin.test.ts
+- [X] T040 [P] [US2] Write failing instrumentation registration tests for Node-only execution and readiness-blocking error propagation in tests/unit/instrumentation.test.ts
 
 ### Implementation for User Story 2
 
-- [ ] T041 [US2] Implement transaction-locked idempotent initial Admin creation and invariant validation in lib/bootstrap/initial-admin.ts
-- [ ] T042 [US2] Invoke and await bootstrap only in the Node.js runtime before readiness in instrumentation.ts
-- [ ] T043 [US2] Execute and record Quickstart Scenario 1 evidence for SC-006 and SC-007 in specs/001-user-role-management/evidence/us2-bootstrap.md
+- [X] T041 [US2] Implement transaction-locked idempotent initial Admin creation and invariant validation in lib/bootstrap/initial-admin.ts
+- [X] T042 [US2] Invoke and await bootstrap only in the Node.js runtime before readiness in instrumentation.ts
+- [X] T043 [US2] Execute and record Quickstart Scenario 1 evidence for SC-006 and SC-007 in specs/001-user-role-management/evidence/us2-bootstrap.md
 
 **Checkpoint**: A clean deployment can obtain its first Admin, and repeat or unsafe startup states cannot modify identity data silently.
 
@@ -122,15 +122,15 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 3
 
-- [ ] T044 [P] [US3] Write failing PostgreSQL query tests for complete directory/detail reads, deterministic ordering, suspended-account retention, absent optional fields, and unknown IDs in tests/integration/users/read-model.test.ts
-- [ ] T045 [P] [US3] Write failing page/component tests for current-session protection, exact directory/detail fields, default avatar rendering, and private caching in tests/unit/components/user-profiles.test.tsx
+- [X] T044 [P] [US3] Write failing PostgreSQL query tests for complete directory/detail reads, deterministic ordering, suspended-account retention, absent optional fields, and unknown IDs in tests/integration/users/read-model.test.ts
+- [X] T045 [P] [US3] Write failing page/component tests for current-session protection, exact directory/detail fields, default avatar rendering, and private caching in tests/unit/components/user-profiles.test.tsx
 
 ### Implementation for User Story 3
 
-- [ ] T046 [US3] Implement constrained authenticated user directory and profile queries in lib/db/queries/users.ts
-- [ ] T047 [P] [US3] Build token-styled user card, directory, profile detail, role/status badge, and default avatar components in components/users/user-card.tsx, components/users/user-directory.tsx, components/users/user-profile.tsx, and components/users/default-avatar.tsx
-- [ ] T048 [US3] Implement requireSession-protected directory and not-found-safe profile pages in app/(shell)/users/page.tsx and app/(shell)/users/[id]/page.tsx
-- [ ] T049 [US3] Record the US3 privacy and rendered-field portion of Quickstart Scenario 4 in specs/001-user-role-management/evidence/us3-profile-viewing.md
+- [X] T046 [US3] Implement constrained authenticated user directory and profile queries in lib/db/queries/users.ts
+- [X] T047 [P] [US3] Build token-styled user card, directory, profile detail, role/status badge, and default avatar components in components/users/user-card.tsx, components/users/user-directory.tsx, components/users/user-profile.tsx, and components/users/default-avatar.tsx
+- [X] T048 [US3] Implement requireSession-protected directory and not-found-safe profile pages in app/(shell)/users/page.tsx and app/(shell)/users/[id]/page.tsx
+- [X] T049 [US3] Record the US3 privacy and rendered-field portion of Quickstart Scenario 4 in specs/001-user-role-management/evidence/us3-profile-viewing.md
 
 **Checkpoint**: Profile viewing is independently usable and team data remains authenticated-only.
 
@@ -144,15 +144,15 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 4
 
-- [ ] T050 [P] [US4] Write failing action tests for self-only authorization, normalized optional fields, immutable role, atomic validation failure, audit data, and next-read freshness in tests/integration/actions/update-profile.test.ts
-- [ ] T051 [P] [US4] Write failing component tests for read-only role, linked field errors, live announcements, focus placement, Save/Cancel behavior, and no avatar mutation requirement in tests/unit/components/profile-editor.test.tsx
+- [X] T050 [P] [US4] Write failing action tests for self-only authorization, normalized optional fields, immutable role, atomic validation failure, audit data, and next-read freshness in tests/integration/actions/update-profile.test.ts
+- [X] T051 [P] [US4] Write failing component tests for read-only role, linked field errors, live announcements, focus placement, Save/Cancel behavior, and no avatar mutation requirement in tests/unit/components/profile-editor.test.tsx
 
 ### Implementation for User Story 4
 
-- [ ] T052 [US4] Implement the text-profile keep-avatar transaction, current-state reauthorization, bounded results, audit event, and cache invalidation in app/actions/users.ts
-- [ ] T053 [P] [US4] Build the token-styled accessible profile editor for normalized text fields and read-only role in components/users/profile-editor.tsx
-- [ ] T054 [US4] Implement the self-authorized edit page and committed-state redirect in app/(shell)/users/[id]/edit/page.tsx
-- [ ] T055 [US4] Record the US4 normalization, authorization, atomicity, and next-read portion of Quickstart Scenario 4 in specs/001-user-role-management/evidence/us4-profile-editing.md
+- [X] T052 [US4] Implement the text-profile keep-avatar transaction, current-state reauthorization, bounded results, audit event, and cache invalidation in app/actions/users.ts
+- [X] T053 [P] [US4] Build the token-styled accessible profile editor for normalized text fields and read-only role in components/users/profile-editor.tsx
+- [X] T054 [US4] Implement the self-authorized edit page and committed-state redirect in app/(shell)/users/[id]/edit/page.tsx
+- [X] T055 [US4] Record the US4 normalization, authorization, atomicity, and next-read portion of Quickstart Scenario 4 in specs/001-user-role-management/evidence/us4-profile-editing.md
 
 **Checkpoint**: Self-profile editing works without Admin management or avatar processing and never trusts client role or identity.
 
@@ -166,22 +166,22 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 5
 
-- [ ] T056 [P] [US5] Write failing transaction tests for Member edit, suspend, reinstate, force-reset assignment, session revocation, preserved fields, Admin-target rejection, and conflicting state changes in tests/integration/actions/member-management.test.ts
-- [ ] T057 [P] [US5] Write failing login/lockout tests for unknown-account timing path, suspended precedence, threshold/exact unlock boundary, source limits, fixed sessions, Remember Me, and logout revocation in tests/integration/actions/login.test.ts
-- [ ] T058 [P] [US5] Write failing restricted forced-reset tests for credential login, 15-minute authorization, route isolation, exact expiry, password change, flag clearing, and fresh-login requirement in tests/integration/actions/forced-reset.test.ts
-- [ ] T059 [P] [US5] Write failing UI tests for eligible Admin controls, three-activation flows, explicit suspended/locked states, confirmation focus, conflicts, and absent deletion controls in tests/unit/components/member-management.test.tsx
-- [ ] T060 [P] [US5] Write failing crafted-request tests proving there is no deletion action or supported HTTP mutation and no related state changes in tests/integration/security/no-account-deletion.test.ts
+- [X] T056 [P] [US5] Write failing transaction tests for Member edit, suspend, reinstate, force-reset assignment, session revocation, preserved fields, Admin-target rejection, and conflicting state changes in tests/integration/actions/member-management.test.ts
+- [X] T057 [P] [US5] Write failing login/lockout tests for unknown-account timing path, suspended precedence, threshold/exact unlock boundary, source limits, fixed sessions, Remember Me, and logout revocation in tests/integration/actions/login.test.ts
+- [X] T058 [P] [US5] Write failing restricted forced-reset tests for credential login, 15-minute authorization, route isolation, exact expiry, password change, flag clearing, and fresh-login requirement in tests/integration/actions/forced-reset.test.ts
+- [X] T059 [P] [US5] Write failing UI tests for eligible Admin controls, three-activation flows, explicit suspended/locked states, confirmation focus, conflicts, and absent deletion controls in tests/unit/components/member-management.test.tsx
+- [X] T060 [P] [US5] Write failing crafted-request tests proving there is no deletion action or supported HTTP mutation and no related state changes in tests/integration/security/no-account-deletion.test.ts
 
 ### Implementation for User Story 5
 
-- [ ] T061 [US5] Implement account-state advisory locking, target row locking, current Member eligibility, active-Admin invariant checks, and Member state queries in lib/db/queries/member-management.ts
-- [ ] T062 [US5] Implement Member edit, suspend, reinstate, and forcePasswordReset actions with transactional audit/session effects in app/actions/users.ts
-- [ ] T063 [US5] Complete login, lockout, Remember Me, restricted forced-reset issuance, logout, and safe error semantics in app/actions/auth.ts
-- [ ] T064 [US5] Implement restricted password completion with session/authorization revocation and fresh-login redirect in app/actions/password.ts
-- [ ] T065 [P] [US5] Build accessible login, Member management controls, confirmations, conflicts, and status messages in components/auth/login-form.tsx and components/users/member-management-controls.tsx
-- [ ] T066 [P] [US5] Build the restricted password-change form with no shell/profile surface in components/auth/forced-password-form.tsx and app/(auth)/change-password/page.tsx
-- [ ] T067 [US5] Integrate current-state Admin edit and management controls into app/(shell)/users/[id]/page.tsx and app/(shell)/users/[id]/edit/page.tsx
-- [ ] T068 [US5] Execute and record Quickstart Scenarios 3, 5, and 7 evidence for US5 outcomes in specs/001-user-role-management/evidence/us5-member-management.md
+- [X] T061 [US5] Implement account-state advisory locking, target row locking, current Member eligibility, active-Admin invariant checks, and Member state queries in lib/db/queries/member-management.ts
+- [X] T062 [US5] Implement Member edit, suspend, reinstate, and forcePasswordReset actions with transactional audit/session effects in app/actions/users.ts
+- [X] T063 [US5] Complete login, lockout, Remember Me, restricted forced-reset issuance, logout, and safe error semantics in app/actions/auth.ts
+- [X] T064 [US5] Implement restricted password completion with session/authorization revocation and fresh-login redirect in app/actions/password.ts
+- [X] T065 [P] [US5] Build accessible login, Member management controls, confirmations, conflicts, and status messages in components/auth/login-form.tsx and components/users/member-management-controls.tsx
+- [X] T066 [P] [US5] Build the restricted password-change form with no shell/profile surface in components/auth/forced-password-form.tsx and app/(auth)/change-password/page.tsx
+- [X] T067 [US5] Integrate current-state Admin edit and management controls into app/(shell)/users/[id]/page.tsx and app/(shell)/users/[id]/edit/page.tsx
+- [X] T068 [US5] Execute and record Quickstart Scenarios 3, 5, and 7 evidence for US5 outcomes in specs/001-user-role-management/evidence/us5-member-management.md
 
 **Checkpoint**: Admin Member lifecycle and forced reset are usable independently; status/security changes apply on the next boundary and no delete path exists.
 
@@ -195,14 +195,14 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 6
 
-- [ ] T069 [P] [US6] Write failing promotion integration tests for active eligibility, preserved sessions, next-request authority, Member denial, suspended/Admin targets, and suspend-versus-promote races in tests/integration/actions/promotion.test.ts
-- [ ] T070 [P] [US6] Write failing promotion control tests for eligibility, accessible confirmation/focus, committed success, conflict refresh guidance, and three-activation completion in tests/unit/components/promotion-control.test.tsx
+- [X] T069 [P] [US6] Write failing promotion integration tests for active eligibility, preserved sessions, next-request authority, Member denial, suspended/Admin targets, and suspend-versus-promote races in tests/integration/actions/promotion.test.ts
+- [X] T070 [P] [US6] Write failing promotion control tests for eligibility, accessible confirmation/focus, committed success, conflict refresh guidance, and three-activation completion in tests/unit/components/promotion-control.test.tsx
 
 ### Implementation for User Story 6
 
-- [ ] T071 [US6] Implement atomic one-way Member promotion with current-state authorization, invariant preservation, audit, and cache invalidation in app/actions/users.ts and lib/db/queries/member-management.ts
-- [ ] T072 [US6] Add the eligible promotion control and committed-state feedback to components/users/member-management-controls.tsx and app/(shell)/users/[id]/page.tsx
-- [ ] T073 [US6] Record the US6 promotion, existing-session, authorization, and concurrency portion of Quickstart Scenario 5 in specs/001-user-role-management/evidence/us6-promotion.md
+- [X] T071 [US6] Implement atomic one-way Member promotion with current-state authorization, invariant preservation, audit, and cache invalidation in app/actions/users.ts and lib/db/queries/member-management.ts
+- [X] T072 [US6] Add the eligible promotion control and committed-state feedback to components/users/member-management-controls.tsx and app/(shell)/users/[id]/page.tsx
+- [X] T073 [US6] Record the US6 promotion, existing-session, authorization, and concurrency portion of Quickstart Scenario 5 in specs/001-user-role-management/evidence/us6-promotion.md
 
 **Checkpoint**: Promotion is independently testable and current database role, not a session snapshot, controls authorization.
 
@@ -216,15 +216,15 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 7
 
-- [ ] T074 [P] [US7] Write failing reset-request tests for canonical lookup, generic unknown/suspended responses, dual rolling limits, supersession, SMTP acceptance/failure, and secret-free events in tests/integration/actions/request-password-reset.test.ts
-- [ ] T075 [P] [US7] Write failing reset intake/completion tests for clean URLs, narrow cookies, purpose/tamper/nonce checks, exact 60-minute expiry, single use, password policy, revocation, and preserved state in tests/integration/actions/complete-password-reset.test.ts
-- [ ] T076 [P] [US7] Write failing component tests for request/completion modes, generic confirmation, invalid-link recovery, linked errors, focus, live announcements, and fresh-login success in tests/unit/components/password-reset.test.tsx
+- [X] T074 [P] [US7] Write failing reset-request tests for canonical lookup, generic unknown/suspended responses, dual rolling limits, supersession, SMTP acceptance/failure, and secret-free events in tests/integration/actions/request-password-reset.test.ts
+- [X] T075 [P] [US7] Write failing reset intake/completion tests for clean URLs, narrow cookies, purpose/tamper/nonce checks, exact 60-minute expiry, single use, password policy, revocation, and preserved state in tests/integration/actions/complete-password-reset.test.ts
+- [X] T076 [P] [US7] Write failing component tests for request/completion modes, generic confirmation, invalid-link recovery, linked errors, focus, live announcements, and fresh-login success in tests/unit/components/password-reset.test.tsx
 
 ### Implementation for User Story 7
 
-- [ ] T077 [US7] Implement reset issuance, prior-token supersession, generic responses, SMTP failure handling, and completion transaction in app/actions/password.ts and lib/db/queries/password-resets.ts
-- [ ] T078 [US7] Implement reset credential intake, token-validation limiting, flow cookie, no-referrer header, and clean redirect in app/auth/password-reset/route.ts
-- [ ] T079 [P] [US7] Build accessible reset request/completion forms and safe invalid-link states in components/auth/password-reset-form.tsx and app/(auth)/reset-password/page.tsx
+- [X] T077 [US7] Implement reset issuance, prior-token supersession, generic responses, SMTP failure handling, and completion transaction in app/actions/password.ts and lib/db/queries/password-resets.ts
+- [X] T078 [US7] Implement reset credential intake, token-validation limiting, flow cookie, no-referrer header, and clean redirect in app/auth/password-reset/route.ts
+- [X] T079 [P] [US7] Build accessible reset request/completion forms and safe invalid-link states in components/auth/password-reset-form.tsx and app/(auth)/reset-password/page.tsx
 - [ ] T080 [US7] Execute and record Quickstart Scenario 6 evidence for SC-010, SC-017, SC-018, and SC-020 in specs/001-user-role-management/evidence/us7-password-reset.md
 
 **Checkpoint**: Self-service reset works independently, remains non-enumerating, and never grants access to a suspended account.
@@ -239,23 +239,23 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 ### Tests for User Story 8
 
-- [ ] T081 [P] [US8] Write failing processor tests for decoded JPEG/PNG validation, MIME mismatch, corruption, animation/active content, 5 MB and 4096-pixel boundaries, metadata removal, aspect ratio, 512-pixel and 1 MB output limits in tests/unit/avatar/processor.test.ts
-- [ ] T082 [P] [US8] Write failing filesystem tests for immutable candidate writes, fsync, path confinement, cleanup, and referenced-file-safe reconciliation in tests/integration/avatar/storage.test.ts
-- [ ] T083 [P] [US8] Write failing profile/avatar transaction tests for keep/replace/remove, absent remove no-op, self/Admin authorization, candidate/write/commit faults, post-commit cleanup faults, and next-read consistency in tests/integration/actions/profile-avatar.test.ts
-- [ ] T084 [P] [US8] Write failing avatar Route Handler tests for authentication, current DB reference lookup, fixed detected content type, nosniff, private/no-store caching, missing-file fallback, and path non-disclosure in tests/integration/http/avatar.test.ts
-- [ ] T085 [P] [US8] Write failing avatar control tests for preview, upload guidance, replace/remove intent, specific errors, focus/live regions, and default state in tests/unit/components/avatar-editor.test.tsx
-- [ ] T086 [P] [US8] Write failing coordinated snapshot, retention, checksum, isolated restore, mismatch reporting, and default-fallback tests in tests/operations/avatar-backup-restore.test.ts
+- [X] T081 [P] [US8] Write failing processor tests for decoded JPEG/PNG validation, MIME mismatch, corruption, animation/active content, 5 MB and 4096-pixel boundaries, metadata removal, aspect ratio, 512-pixel and 1 MB output limits in tests/unit/avatar/processor.test.ts
+- [X] T082 [P] [US8] Write failing filesystem tests for immutable candidate writes, fsync, path confinement, cleanup, and referenced-file-safe reconciliation in tests/integration/avatar/storage.test.ts
+- [X] T083 [P] [US8] Write failing profile/avatar transaction tests for keep/replace/remove, absent remove no-op, self/Admin authorization, candidate/write/commit faults, post-commit cleanup faults, and next-read consistency in tests/integration/actions/profile-avatar.test.ts
+- [X] T084 [P] [US8] Write failing avatar Route Handler tests for authentication, current DB reference lookup, fixed detected content type, nosniff, private/no-store caching, missing-file fallback, and path non-disclosure in tests/integration/http/avatar.test.ts
+- [X] T085 [P] [US8] Write failing avatar control tests for preview, upload guidance, replace/remove intent, specific errors, focus/live regions, and default state in tests/unit/components/avatar-editor.test.tsx
+- [X] T086 [P] [US8] Write failing coordinated snapshot, retention, checksum, isolated restore, mismatch reporting, and default-fallback tests in tests/operations/avatar-backup-restore.test.ts
 
 ### Implementation for User Story 8
 
-- [ ] T087 [US8] Implement approved sharp-based decode, validation, orientation normalization, metadata-stripping re-encode, resize, and output bounds in lib/avatar/processor.ts
-- [ ] T088 [US8] Implement private immutable candidate storage, fsync, cleanup, lookup confinement, and orphan reconciliation in lib/avatar/storage.ts and lib/avatar/reconcile.ts
-- [ ] T089 [US8] Extend updateProfile to commit text fields and avatar reference atomically with pre-commit candidate cleanup and post-commit old-file handling in app/actions/users.ts
-- [ ] T090 [US8] Implement authenticated private avatar streaming and default-fallback behavior in app/api/users/[id]/avatar/route.ts
-- [ ] T091 [US8] Integrate accessible avatar keep/replace/remove controls into components/users/avatar-editor.tsx and components/users/profile-editor.tsx
-- [ ] T092 [US8] Add the durable avatar volume, AVATAR_STORAGE_PATH, internal-only PostgreSQL networking, and application mount ownership to docker-compose.yml and Dockerfile
-- [ ] T093 [US8] Implement encrypted coordinated database/avatar snapshot, 30-day retention, isolated restore, and reference verification in ops/backup.sh, ops/restore.sh, and ops/verify-restore.sh
-- [ ] T094 [US8] Execute and record Quickstart Scenarios 8 and 12, distinguishing script tests from live volume/restore evidence, in specs/001-user-role-management/evidence/us8-avatar-recovery.md
+- [X] T087 [US8] Implement approved sharp-based decode, validation, orientation normalization, metadata-stripping re-encode, resize, and output bounds in lib/avatar/processor.ts
+- [X] T088 [US8] Implement private immutable candidate storage, fsync, cleanup, lookup confinement, and orphan reconciliation in lib/avatar/storage.ts and lib/avatar/reconcile.ts
+- [X] T089 [US8] Extend updateProfile to commit text fields and avatar reference atomically with pre-commit candidate cleanup and post-commit old-file handling in app/actions/users.ts
+- [X] T090 [US8] Implement authenticated private avatar streaming and default-fallback behavior in app/api/users/[id]/avatar/route.ts
+- [X] T091 [US8] Integrate accessible avatar keep/replace/remove controls into components/users/avatar-editor.tsx and components/users/profile-editor.tsx
+- [X] T092 [US8] Add the durable avatar volume, AVATAR_STORAGE_PATH, internal-only PostgreSQL networking, and application mount ownership to docker-compose.yml and Dockerfile
+- [X] T093 [US8] Implement encrypted coordinated database/avatar snapshot, 30-day retention, isolated restore, and reference verification in ops/backup.sh, ops/restore.sh, and ops/verify-restore.sh
+- [X] T094 [US8] Execute and record Quickstart Scenarios 8 and 12, distinguishing script tests from live volume/restore evidence, in specs/001-user-role-management/evidence/us8-avatar-recovery.md
 
 **Checkpoint**: Avatar management is independently testable and deployment/rollback cannot erase referenced private files.
 
@@ -265,16 +265,16 @@ description: "Dependency-ordered implementation tasks for user role and account 
 
 **Purpose**: Prove whole-feature accessibility, performance, degradation, secret hygiene, maintainability, and operational readiness without overstating static evidence.
 
-- [ ] T095 [P] Write axe-core accessibility suites for every in-scope normal, error, limited, degraded, invalid-token, and restricted state in tests/accessibility/account-management.test.tsx
+- [X] T095 [P] Write axe-core accessibility suites for every in-scope normal, error, limited, degraded, invalid-token, and restricted state in tests/accessibility/account-management.test.tsx
 - [ ] T096 Complete the manual WCAG 2.2 AA keyboard, focus, screen-reader, 200% zoom, and error-identification matrix and record environment-specific evidence in specs/001-user-role-management/evidence/accessibility.md
 - [ ] T097 [P] Implement and run the production-equivalent 100-navigation profile timing harness with 20 users and 10 concurrent authenticated users in tests/performance/profile-navigation.mjs and record SC-004 evidence in specs/001-user-role-management/evidence/performance.md
 - [ ] T098 [P] Run SMTP rejection, timeout, recovery, delayed, and duplicate-delivery exercises across email and non-email journeys and record SC-020 evidence in specs/001-user-role-management/evidence/smtp-degradation.md
-- [ ] T099 [P] Add credential/log/referrer/database inspection coverage for all raw-token, profile, recipient, source-address, and image leakage prohibitions in tests/integration/security/secret-hygiene.test.ts
-- [ ] T100 Write failing pruning tests in tests/integration/maintenance/prune.test.ts, then implement idempotent pruning for expired/revoked credentials, rate-limit records, and stale unreferenced avatar candidates in lib/maintenance/prune.ts
-- [ ] T101 [P] Update deployment prerequisites, migrations, secrets, avatar volume, backups, rollback, quarterly restore, and live-evidence boundaries in DEPLOYMENT.md
-- [ ] T102 Execute npm run test:integration, npm run test:accessibility, npm test -- --run, and npm run verify and record exact command results in specs/001-user-role-management/evidence/automated-verification.md
+- [X] T099 [P] Add credential/log/referrer/database inspection coverage for all raw-token, profile, recipient, source-address, and image leakage prohibitions in tests/integration/security/secret-hygiene.test.ts
+- [X] T100 Write failing pruning tests in tests/integration/maintenance/prune.test.ts, then implement idempotent pruning for expired/revoked credentials, rate-limit records, and stale unreferenced avatar candidates in lib/maintenance/prune.ts
+- [X] T101 [P] Update deployment prerequisites, migrations, secrets, avatar volume, backups, rollback, quarterly restore, and live-evidence boundaries in DEPLOYMENT.md
+- [X] T102 Execute npm run test:integration, npm run test:accessibility, npm test -- --run, and npm run verify and record exact command results in specs/001-user-role-management/evidence/automated-verification.md
 - [ ] T103 Execute the complete specs/001-user-role-management/quickstart.md matrix and update specs/001-user-role-management/checklists/requirements.md with only evidence actually obtained
-- [ ] T104 Review all changed application source for forbidden comments, raw StyleX values, any usage, dead code, public avatar paths, stale authorization snapshots, and unsupported delete paths, then record the review in specs/001-user-role-management/evidence/constitution-review.md
+- [X] T104 Review all changed application source for forbidden comments, raw StyleX values, any usage, dead code, public avatar paths, stale authorization snapshots, and unsupported delete paths, then record the review in specs/001-user-role-management/evidence/constitution-review.md
 
 **Checkpoint**: Automated checks and each required live/manual/operational category have separate, truthful evidence records.
 
