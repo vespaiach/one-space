@@ -40,3 +40,17 @@ export async function recordAuditEvent(database: Database, input: AuditEventInpu
   if (!event) throw new Error("Audit event was not persisted");
   return projectAuditEvent(event);
 }
+
+export async function recordProjectMembershipAddFailure(
+  database: Database,
+  input: { actorId: string; targetId: string },
+) {
+  return recordAuditEvent(database, {
+    category: "operations",
+    action: "project.membership.add",
+    outcome: "failed",
+    actorId: input.actorId,
+    targetId: input.targetId,
+    reasonCode: "transaction_failed",
+  });
+}

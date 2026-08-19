@@ -1,5 +1,7 @@
-import { date, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { date, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { users } from "./users";
+
+export const projectStatus = pgEnum("project_status", ["active", "archived"]);
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -7,6 +9,7 @@ export const projects = pgTable("projects", {
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description").notNull(),
   color: varchar("color", { length: 20 }).notNull(),
+  status: projectStatus("status").notNull().default("active"),
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
   createdBy: uuid("created_by")

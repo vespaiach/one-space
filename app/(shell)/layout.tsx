@@ -1,5 +1,7 @@
 import { Shell } from "@/components/ui/shell";
 import { requireSession } from "@/lib/auth/guards";
+import { db } from "@/lib/db";
+import { listNotificationsForRecipient } from "@/lib/db/queries/notifications";
 
 const PROJECTS = [
   { key: "WEB", name: "Website Redesign", color: "oklch(0.6396 0.1221 54.97)", issueCount: 13 },
@@ -19,11 +21,13 @@ const MEMBERS = [
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
+  const notifications = await listNotificationsForRecipient(db, session.userId);
   return (
     <Shell
       members={MEMBERS}
       projects={PROJECTS}
-      isAdmin={session.role === "admin"}>
+      isAdmin={session.role === "admin"}
+      notificationCount={notifications.length}>
       {children}
     </Shell>
   );
