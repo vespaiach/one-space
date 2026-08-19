@@ -186,3 +186,19 @@ export const structure = stylex.defineVars({
   justifyBetween: "space-between",
   cover: "cover",
 });
+
+/* ---- Project identity colors (12-color palette, token key stored in DB) -- */
+export const projectColors = stylex.defineVars({
+  red: "oklch(0.5656 0.1608 34.09)",
+  coral: "oklch(0.6300 0.1550 30.00)",
+  orange: "oklch(0.6396 0.1221 54.97)",
+  amber: "oklch(0.7200 0.1132 72.89)",
+  yellow: "oklch(0.8100 0.1400 95.00)",
+  lime: "oklch(0.7200 0.1300 130.00)",
+  green: "oklch(0.6050 0.0591 141.65)",
+  teal: "oklch(0.5880 0.0851 195.00)",
+  sky: "oklch(0.6500 0.0900 230.00)",
+  blue: "oklch(0.5259 0.0603 247.43)",
+  purple: "oklch(0.5432 0.1084 305.31)",
+  pink: "oklch(0.6800 0.1300 350.00)",
+});
