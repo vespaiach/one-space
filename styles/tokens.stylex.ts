@@ -179,12 +179,14 @@ export const structure = stylex.defineVars({
   grid: "grid",
   none: "none",
   widthFull: "100%",
+  minWidthZero: "0",
   minHeightScreen: "100vh",
   auto: "auto",
   borderSolid: "solid",
   alignCenter: "center",
   justifyBetween: "space-between",
   cover: "cover",
+  capitalize: "capitalize",
 });
 
 /* ---- Project identity colors (12-color palette, token key stored in DB) -- */

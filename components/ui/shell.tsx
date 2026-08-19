@@ -381,9 +381,16 @@ type ShellProps = {
     initials: string;
     bg: string;
   }>;
+  notificationCount?: number;
 };
 
-export function Shell({ children, isAdmin = false, projects = [], members = [] }: ShellProps) {
+export function Shell({
+  children,
+  isAdmin = false,
+  projects = [],
+  members = [],
+  notificationCount = 0,
+}: ShellProps) {
   const pathname = usePathname();
 
   return (
@@ -462,7 +469,7 @@ export function Shell({ children, isAdmin = false, projects = [], members = [] }
               )}>
               <IconBell />
               Notifications
-              <span {...stylex.props(styles.navBadge)}>3</span>
+              <span {...stylex.props(styles.navBadge)}>{notificationCount}</span>
             </Link>
             {isAdmin && (
               <Link

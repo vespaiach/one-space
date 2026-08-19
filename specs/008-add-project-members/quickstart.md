@@ -32,29 +32,28 @@ docker run --name one-space-members-test \
   -p 55433:5432 \
   -d postgres:18-alpine
 
-export TEST_DATABASE_URL='postgres://one_space_test:one_space_test@127.0.0.1:55433/one_space_members_test'
-export DATABASE_URL="$TEST_DATABASE_URL"
-npm run db:migrate
+export DATABASE_URL_TEST='postgres://one_space_test:one_space_test@127.0.0.1:55433/one_space_members_test'
+DATABASE_URL="$DATABASE_URL_TEST" npm run db:migrate
 ```
 
-Tests MUST fail fast when `TEST_DATABASE_URL` is absent and MUST refuse a database name that is not explicitly recognized as disposable/test-only.
+Database-backed tests MUST fail fast when `DATABASE_URL_TEST` is absent, MUST refuse a database name that is not explicitly recognized as disposable/test-only, and MUST refuse to run when it equals `DATABASE_URL`.
 
 ## Automated validation
 
 Run focused tests first:
 
 ```sh
-TEST_DATABASE_URL="$TEST_DATABASE_URL" npm test -- tests/unit/projects/add-project-member.test.ts
-TEST_DATABASE_URL="$TEST_DATABASE_URL" npm test -- tests/component/projects/add-project-member-form.test.tsx
-TEST_DATABASE_URL="$TEST_DATABASE_URL" npm test -- tests/integration/projects/add-project-member-action.test.ts
-TEST_DATABASE_URL="$TEST_DATABASE_URL" npm test -- tests/integration/projects/add-project-member-concurrency.test.ts
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npx vitest run tests/unit/projects/project-member-identifiers.test.ts
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npx vitest run tests/component/projects/add-project-member-form.test.tsx
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npx vitest run --environment=node --maxWorkers=1 --no-file-parallelism tests/integration/projects/add-project-member-action.test.ts
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npx vitest run --environment=node --maxWorkers=1 --no-file-parallelism tests/integration/projects/add-project-member-concurrency.test.ts
 ```
 
 Then run the full project gates:
 
 ```sh
-TEST_DATABASE_URL="$TEST_DATABASE_URL" DATABASE_URL="$TEST_DATABASE_URL" npm test
-DATABASE_URL="$TEST_DATABASE_URL" npm run verify
+DATABASE_URL_TEST="$DATABASE_URL_TEST" npx vitest run --maxWorkers=1 --no-file-parallelism
+env -u DATABASE_URL_TEST DATABASE_URL="$DATABASE_URL_TEST" npm run verify
 ```
 
 ## Required fixtures

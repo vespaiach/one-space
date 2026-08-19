@@ -114,7 +114,7 @@
 
 ## Decision 9: Test with an isolated PostgreSQL database
 
-**Decision**: Unit-test validation and result mapping, component-test every normative accessible form state, and integration-test real constraints and transaction behavior against an explicit disposable `TEST_DATABASE_URL`. Validation includes the SC-006 rejection matrix, 20 synchronized concurrency pairs, 20 repeated submissions, and 100 timed Notification reads.
+**Decision**: Unit-test validation and result mapping, component-test every normative accessible form state, and integration-test real constraints and transaction behavior against an explicit disposable `DATABASE_URL_TEST`. Validation includes the SC-006 rejection matrix, 20 synchronized concurrency pairs, 20 repeated submissions, and 100 timed Notification reads.
 
 **Rationale**: In-memory mocks cannot prove PostgreSQL partial uniqueness, rollback, or concurrent transaction behavior. The inherited development or production database must never be mutated by tests.
 
