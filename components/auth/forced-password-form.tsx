@@ -1,18 +1,12 @@
 import * as stylex from "@stylexjs/stylex";
 import { completeForcedPasswordReset } from "@/app/actions/password";
+import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { StatusMessage } from "@/components/ui/status-message";
-import { colors, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { space, structure } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
   form: { display: structure.grid, gap: space.s6 },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    color: colors.primaryForeground,
-    fontWeight: type.weightSemibold,
-    padding: space.s5,
-  },
 });
 
 export function ForcedPasswordForm({
@@ -53,11 +47,7 @@ export function ForcedPasswordForm({
           required
         />
       </FormField>
-      <button
-        {...stylex.props(styles.button)}
-        type="submit">
-        Change password
-      </button>
+      <Button type="submit">Change password</Button>
     </form>
   );
 }

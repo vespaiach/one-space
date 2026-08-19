@@ -1,19 +1,13 @@
 import * as stylex from "@stylexjs/stylex";
 import Link from "next/link";
 import { completePasswordReset, requestPasswordReset } from "@/app/actions/password";
+import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { StatusMessage } from "@/components/ui/status-message";
-import { colors, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { space, structure } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
   form: { display: structure.grid, gap: space.s6 },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    color: colors.primaryForeground,
-    fontWeight: type.weightSemibold,
-    padding: space.s5,
-  },
 });
 
 type PasswordResetFormProps = {
@@ -57,11 +51,7 @@ export function PasswordResetForm({
             required
           />
         </FormField>
-        <button
-          {...stylex.props(styles.button)}
-          type="submit">
-          Request password reset
-        </button>
+        <Button type="submit">Request password reset</Button>
       </form>
     );
   return (
@@ -91,11 +81,7 @@ export function PasswordResetForm({
           required
         />
       </FormField>
-      <button
-        {...stylex.props(styles.button)}
-        type="submit">
-        Reset password
-      </button>
+      <Button type="submit">Reset password</Button>
     </form>
   );
 }

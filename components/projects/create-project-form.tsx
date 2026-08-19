@@ -3,6 +3,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { useActionState, useRef, useState } from "react";
 import { createProject } from "@/app/actions/projects";
+import { Button } from "@/components/ui/button";
 import { generateProjectKey } from "@/lib/projects/key-generator";
 import { colors, layout, projectColors, radius, space, structure, type } from "@/styles/tokens.stylex";
 
@@ -57,13 +58,6 @@ const styles = stylex.create({
   },
   swatchSelected: { borderColor: colors.foreground },
   swatchUnselected: { borderColor: colors.border },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    color: colors.primaryForeground,
-    fontWeight: type.weightSemibold,
-    padding: space.s5,
-  },
   fieldGroup: { display: structure.grid, gap: space.s2 },
 });
 
@@ -258,12 +252,11 @@ export function CreateProjectForm() {
         />
       </div>
 
-      <button
-        {...stylex.props(styles.button)}
+      <Button
         type="submit"
         disabled={isPending}>
         Create Project
-      </button>
+      </Button>
     </form>
   );
 }

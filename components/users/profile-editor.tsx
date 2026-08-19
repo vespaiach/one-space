@@ -1,22 +1,16 @@
 import * as stylex from "@stylexjs/stylex";
 import Link from "next/link";
 import { updateProfile } from "@/app/actions/users";
+import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
 import { StatusMessage } from "@/components/ui/status-message";
 import type { UserView } from "@/lib/db/queries/users";
-import { colors, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { space, structure } from "@/styles/tokens.stylex";
 import { AvatarEditor } from "./avatar-editor";
 
 const styles = stylex.create({
   form: { display: structure.grid, gap: space.s6 },
   actions: { display: structure.flex, gap: space.s5 },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    color: colors.primaryForeground,
-    fontWeight: type.weightSemibold,
-    padding: space.s5,
-  },
 });
 
 export function ProfileEditor({
@@ -119,11 +113,7 @@ export function ProfileEditor({
         />
       </FormField>
       <div {...stylex.props(styles.actions)}>
-        <button
-          {...stylex.props(styles.button)}
-          type="submit">
-          Save
-        </button>
+        <Button type="submit">Save</Button>
         <Link href={`/users/${user.id}`}>Cancel</Link>
       </div>
     </form>

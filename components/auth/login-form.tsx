@@ -6,8 +6,9 @@ import { useState } from "react";
 import { login } from "@/app/actions/auth";
 import Eye from "@/components/icons/eye";
 import EyeOff from "@/components/icons/eye-off";
+import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
-import { colors, radius, shadow, space, structure, type } from "@/styles/tokens.stylex";
+import { colors, radius, space, structure, type } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
   form: { display: structure.block },
@@ -81,20 +82,7 @@ const styles = stylex.create({
     color: colors.primary,
     fontWeight: type.weightMedium,
   },
-  submit: {
-    width: structure.widthFull,
-    paddingBlock: space.s4,
-    borderWidth: 0,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary,
-    color: colors.primaryForeground,
-    fontSize: type.sizeBase,
-    fontWeight: type.weightSemibold,
-    boxShadow: shadow.sm,
-    ":hover": {
-      filter: "brightness(1.05)",
-    },
-  },
+  submitButton: { width: structure.widthFull },
   hint: {
     fontSize: type.sizeXs,
     color: colors.mutedForeground,
@@ -192,12 +180,12 @@ export function LoginForm({
           Forgot password?
         </Link>
       </div>
-      <button
-        {...stylex.props(styles.submit)}
-        type="submit">
+      <Button
+        type="submit"
+        xstyle={styles.submitButton}>
         Login
-      </button>
-      <p {...stylex.props(styles.hint)}>Need an account? Ask a workspace admin to invite you.</p>
+      </Button>
+      <p {...stylex.props(styles.hint)}>Need an account? Ask an administrator to invite you.</p>
     </form>
   );
 }

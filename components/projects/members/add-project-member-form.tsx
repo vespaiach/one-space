@@ -3,6 +3,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { useActionState, useEffect, useState } from "react";
 import { type AddProjectMemberState, addProjectMember } from "@/app/actions/project-members";
+import { Button } from "@/components/ui/button";
 import { StatusMessage } from "@/components/ui/status-message";
 import type { ProjectMemberCandidate } from "@/lib/db/queries/project-members";
 import { colors, layout, radius, space, structure, type } from "@/styles/tokens.stylex";
@@ -23,13 +24,6 @@ const styles = stylex.create({
     minWidth: structure.minWidthZero,
     padding: space.s4,
     width: structure.widthFull,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.lg,
-    color: colors.primaryForeground,
-    fontWeight: type.weightSemibold,
-    padding: space.s4,
   },
   empty: { color: colors.textSecondary, fontSize: type.sizeSm },
 });
@@ -116,12 +110,11 @@ export function AddProjectMemberForm({ projectId, projectName, candidates }: Add
         </StatusMessage>
       ) : null}
       {state.status === "error" ? <StatusMessage tone="error">{state.message}</StatusMessage> : null}
-      <button
-        {...stylex.props(styles.button)}
+      <Button
         type="submit"
         disabled={!selectedUserId || isPending}>
         {isPending ? "Adding member…" : "Add member"}
-      </button>
+      </Button>
     </form>
   );
 }
