@@ -1,0 +1,47 @@
+export default function Logo({
+  width = 16,
+  height = 16,
+  title = "Logo Icon",
+}: {
+  width?: number;
+  height?: number;
+  title?: string;
+}) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={width}
+      height={height}
+      viewBox="0 0 52 52"
+      fill="none">
+      <title>{title}</title>
+      <circle
+        cx="26"
+        cy="26"
+        r="17"
+        stroke="#B26B32"
+        strokeWidth="2.4"
+        opacity="0.4"></circle>
+      <circle
+        cx="26"
+        cy="26"
+        r="6.5"
+        fill="#B26B32"></circle>
+      <circle
+        cx="26"
+        cy="9"
+        r="4"
+        fill="#8C5A3B"></circle>
+      <circle
+        cx="41"
+        cy="34"
+        r="4"
+        fill="#8C5A3B"></circle>
+      <circle
+        cx="11"
+        cy="34"
+        r="4"
+        fill="#8C5A3B"></circle>
+    </svg>
+  );
+}

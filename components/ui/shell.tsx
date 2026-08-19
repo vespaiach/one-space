@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { logout } from "@/app/actions/auth";
 import IconBell from "@/components/icons/bell";
 import IconHome from "@/components/icons/home";
+import IconLogo from "@/components/icons/logo";
 import IconLogOut from "@/components/icons/logout";
 import IconSmallPlus from "@/components/icons/small-plus";
 import IconUserPlus from "@/components/icons/user-plus";
@@ -15,6 +16,17 @@ const styles = stylex.create({
   root: {
     display: structure.flex,
     minHeight: structure.minHeightScreen,
+  },
+
+  navSeparator: {
+    paddingLeft: space.s4,
+    paddingRight: space.s4,
+  },
+
+  navSeparatorLine: {
+    borderTopWidth: "1px",
+    borderTopStyle: structure.borderSolid,
+    borderTopColor: colors.sidebarBorder,
   },
 
   sidebar: {
@@ -381,7 +393,10 @@ export function Shell({ children, isAdmin = false, projects = [], members = [] }
         aria-label="Sidebar">
         <div {...stylex.props(styles.sidebarScroll)}>
           <div {...stylex.props(styles.logoArea)}>
-            <div {...stylex.props(styles.logoIcon)}>OS</div>
+            <IconLogo
+              width={28}
+              height={28}
+            />
             <div>
               <div {...stylex.props(styles.logoName)}>One Space</div>
               <div {...stylex.props(styles.logoTagline)}>One Space, One Team</div>
@@ -399,7 +414,11 @@ export function Shell({ children, isAdmin = false, projects = [], members = [] }
             </Link>
           </nav>
 
-          <div {...stylex.props(styles.projectsSection)}>
+          <div {...stylex.props(styles.navSeparator)}>
+            <hr {...stylex.props(styles.navSeparatorLine)} />
+          </div>
+
+          <nav {...stylex.props(styles.projectsSection)}>
             <div {...stylex.props(styles.projectsHeader)}>
               <span {...stylex.props(styles.projectsLabel)}>Projects</span>
               <button
@@ -426,6 +445,10 @@ export function Shell({ children, isAdmin = false, projects = [], members = [] }
                 </li>
               ))}
             </ul>
+          </nav>
+          
+          <div {...stylex.props(styles.navSeparator)}>
+            <hr {...stylex.props(styles.navSeparatorLine)} />
           </div>
 
           <nav
