@@ -7,7 +7,11 @@ function redirect(request: NextRequest, pathname: string): NextResponse {
 
 export function proxy(request: NextRequest): NextResponse {
   const pathname = request.nextUrl.pathname;
-  if (pathname === "/register" && !request.cookies.has("invitation_flow")) {
+  if (
+    pathname === "/register" &&
+    !request.cookies.has("invitation_flow") &&
+    request.nextUrl.searchParams.get("invalid") !== "true"
+  ) {
     return redirect(request, "/register?invalid=true");
   }
   if (pathname === "/change-password" && !request.cookies.has("forced_reset")) {

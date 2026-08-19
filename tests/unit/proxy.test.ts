@@ -19,6 +19,10 @@ describe("Proxy routing hints", () => {
     expect(proxy(request("/register", "invitation_flow=value")).status).toBe(200);
   });
 
+  it("does not loop when redirecting to the invalid registration state", () => {
+    expect(proxy(request("/register?invalid=true")).status).toBe(200);
+  });
+
   it("requires restricted authorization for forced password change", () => {
     expect(proxy(request("/change-password")).headers.get("location")).toContain("/login");
     expect(proxy(request("/change-password", "forced_reset=value")).status).toBe(200);
