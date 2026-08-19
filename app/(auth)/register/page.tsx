@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { AuthCard } from "@/components/auth/auth-card";
 import { RegistrationForm } from "@/components/auth/registration-form";
 import { readRuntimeConfig } from "@/lib/config/env";
 import { decryptCredential } from "@/lib/crypto/credentials";
@@ -21,14 +22,16 @@ export default async function RegisterPage({
       email = undefined;
     }
   }
+  const invalid = !email || query.invalid === "true";
   return (
-    <section>
-      <h1>Create your account</h1>
+    <AuthCard
+      heading={invalid ? "Invitation invalid" : "Create your account"}
+      subheading={invalid ? undefined : "Just a few details to finish."}>
       <RegistrationForm
         email={email}
-        invalid={!email || query.invalid === "true"}
+        invalid={invalid}
         error={typeof query.error === "string" ? query.error : undefined}
       />
-    </section>
+    </AuthCard>
   );
 }

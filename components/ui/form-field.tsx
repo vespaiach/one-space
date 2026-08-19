@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import React from "react";
-import { colors, layout, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { colors, space, structure, type } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
   field: {
@@ -8,27 +8,21 @@ const styles = stylex.create({
     gap: space.s2,
   },
   label: {
-    color: colors.foreground,
-    fontSize: type.sizeBase,
+    display: structure.block,
+    fontSize: type.size2xs,
     fontWeight: type.weightSemibold,
+    letterSpacing: type.trackingWide,
+    textTransform: "uppercase",
+    color: colors.mutedForeground,
   },
   hint: {
-    color: colors.textSecondary,
-    fontSize: type.sizeSm,
+    fontSize: type.sizeXs,
+    color: colors.mutedForeground,
+    lineHeight: type.leadingNormal,
   },
   error: {
     color: colors.destructive,
     fontSize: type.sizeSm,
-  },
-  input: {
-    width: structure.widthFull,
-    borderColor: colors.input,
-    borderRadius: radius.lg,
-    borderStyle: structure.borderSolid,
-    borderWidth: layout.focusRingWidth,
-    backgroundColor: colors.card,
-    paddingBlock: space.s4,
-    paddingInline: space.s5,
   },
 });
 
@@ -61,7 +55,6 @@ export function FormField({ id, label, hint, error, children }: FormFieldProps) 
         id,
         "aria-describedby": [hintId, errorId].filter(Boolean).join(" ") || undefined,
         "aria-invalid": Boolean(error),
-        ...stylex.props(styles.input),
       })}
       {error ? (
         <p

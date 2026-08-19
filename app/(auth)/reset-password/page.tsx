@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { AuthCard } from "@/components/auth/auth-card";
 import { PasswordResetForm } from "@/components/auth/password-reset-form";
 import { readRuntimeConfig } from "@/lib/config/env";
 import { db } from "@/lib/db";
@@ -15,14 +16,32 @@ export default async function ResetPasswordPage({
     ? await validatePasswordResetIntake(db, token, readRuntimeConfig().tokenEncryptionKey)
     : null;
   const mode = query.invalid === "true" ? "invalid" : intake?.status === "valid" ? "complete" : "request";
+  const requested = query.requested === "true";
+  const heading =
+    mode === "invalid"
+      ? "Link invalid"
+      : mode === "complete"
+        ? "Set a new password"
+        : requested
+          ? "Check your email"
+          : "Reset your password";
+  const subheading =
+    mode === "invalid"
+      ? undefined
+      : mode === "complete"
+        ? "Choose a new password for your account."
+        : requested
+          ? undefined
+          : "Enter the email for your account and we'll send you a link to set a new password.";
   return (
-    <section>
-      <h1>Reset password</h1>
+    <AuthCard
+      heading={heading}
+      subheading={subheading}>
       <PasswordResetForm
         mode={mode}
-        requested={query.requested === "true"}
+        requested={requested}
         error={typeof query.error === "string" ? query.error : undefined}
       />
-    </section>
+    </AuthCard>
   );
 }

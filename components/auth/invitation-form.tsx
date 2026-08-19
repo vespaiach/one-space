@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { sendInvitation } from "@/app/actions/invitations";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { StatusMessage } from "@/components/ui/status-message";
 import { INVITATION_NON_REVOCATION_WARNING } from "@/lib/invitations/service";
 import { space, structure } from "@/styles/tokens.stylex";
@@ -43,7 +44,7 @@ export function InvitationForm({
       <FormField
         id="invitation-email"
         label="Email address">
-        <input
+        <Input
           name="email"
           type="email"
           autoComplete="email"

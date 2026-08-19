@@ -3,6 +3,7 @@ import Link from "next/link";
 import { updateProfile } from "@/app/actions/users";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/form-field";
+import { Input } from "@/components/ui/input";
 import { StatusMessage } from "@/components/ui/status-message";
 import type { UserView } from "@/lib/db/queries/users";
 import { space, structure } from "@/styles/tokens.stylex";
@@ -70,7 +71,7 @@ export function ProfileEditor({
         id="edit-first-name"
         label="First name"
         error={field === "firstName" ? fieldError : undefined}>
-        <input
+        <Input
           name="firstName"
           defaultValue={user.firstName}
           required
@@ -80,7 +81,7 @@ export function ProfileEditor({
         id="edit-last-name"
         label="Last name"
         error={field === "lastName" ? fieldError : undefined}>
-        <input
+        <Input
           name="lastName"
           defaultValue={user.lastName}
           required
@@ -90,7 +91,7 @@ export function ProfileEditor({
         id="edit-phone"
         label="Phone number"
         error={field === "phoneNumber" ? fieldError : undefined}>
-        <input
+        <Input
           name="phoneNumber"
           defaultValue={user.phoneNumber ?? ""}
         />
@@ -99,7 +100,7 @@ export function ProfileEditor({
         id="edit-slack"
         label="Slack handle"
         error={field === "slackHandle" ? fieldError : undefined}>
-        <input
+        <Input
           name="slackHandle"
           defaultValue={user.slackHandle ?? ""}
         />
@@ -107,7 +108,7 @@ export function ProfileEditor({
       <FormField
         id="edit-role"
         label="Role">
-        <input
+        <Input
           value={user.role === "admin" ? "Admin" : "Member"}
           readOnly
         />

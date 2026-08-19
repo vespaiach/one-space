@@ -1,14 +1,13 @@
 "use client";
 
 import * as stylex from "@stylexjs/stylex";
-import Link from "next/link";
-import { useState } from "react";
 import { login } from "@/app/actions/auth";
-import Eye from "@/components/icons/eye";
-import EyeOff from "@/components/icons/eye-off";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Link } from "@/components/ui/link";
+import { PasswordInput } from "@/components/ui/password-input";
 import { StatusMessage } from "@/components/ui/status-message";
-import { colors, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { colors, space, structure, type } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
   form: { display: structure.block },
@@ -21,43 +20,6 @@ const styles = stylex.create({
     textTransform: "uppercase",
     color: colors.mutedForeground,
     marginBottom: space.s3,
-  },
-  input: {
-    width: structure.widthFull,
-    paddingBlock: space.s4,
-    paddingInline: space.s5,
-    borderWidth: "1px",
-    borderStyle: structure.borderSolid,
-    borderColor: colors.input,
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    fontSize: type.sizeBase,
-    color: colors.foreground,
-    outlineStyle: "none",
-    ":focus": {
-      borderColor: colors.primary,
-    },
-  },
-  passwordWrap: { position: "relative" },
-  passwordInput: { paddingRight: "42px" },
-  toggleButton: {
-    position: "absolute",
-    right: space.s3,
-    top: "50%",
-    transform: "translateY(-50%)",
-    width: "28px",
-    height: "28px",
-    borderWidth: 0,
-    borderRadius: radius.sm,
-    backgroundColor: "transparent",
-    color: colors.mutedForeground,
-    display: structure.flex,
-    alignItems: structure.alignCenter,
-    justifyContent: structure.alignCenter,
-    ":hover": {
-      backgroundColor: colors.accent,
-      color: colors.textBody,
-    },
   },
   row: {
     display: structure.flex,
@@ -79,7 +41,6 @@ const styles = stylex.create({
   },
   forgotLink: {
     fontSize: type.sizeSm,
-    color: colors.primary,
     fontWeight: type.weightMedium,
   },
   submitButton: { width: structure.widthFull },
@@ -101,7 +62,6 @@ export function LoginForm({
   error?: string;
   retryAt?: string;
 }) {
-  const [showPassword, setShowPassword] = useState(false);
   const message =
     error === "suspended"
       ? "Your account has been suspended. Contact your administrator."
@@ -131,8 +91,7 @@ export function LoginForm({
           htmlFor="login-email">
           Email
         </label>
-        <input
-          {...stylex.props(styles.input)}
+        <Input
           id="login-email"
           name="email"
           type="email"
@@ -146,24 +105,13 @@ export function LoginForm({
           htmlFor="login-password">
           Password
         </label>
-        <div {...stylex.props(styles.passwordWrap)}>
-          <input
-            {...stylex.props(styles.input, styles.passwordInput)}
-            id="login-password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            required
-          />
-          <button
-            {...stylex.props(styles.toggleButton)}
-            type="button"
-            onClick={() => setShowPassword((value) => !value)}
-            aria-label={showPassword ? "Hide password" : "Show password"}>
-            {showPassword ? <EyeOff /> : <Eye />}
-          </button>
-        </div>
+        <PasswordInput
+          id="login-password"
+          name="password"
+          placeholder="Enter your password"
+          autoComplete="current-password"
+          required
+        />
       </div>
       <div {...stylex.props(styles.row)}>
         <label {...stylex.props(styles.remember)}>
@@ -175,7 +123,7 @@ export function LoginForm({
           Remember me
         </label>
         <Link
-          {...stylex.props(styles.forgotLink)}
+          xstyle={styles.forgotLink}
           href="/reset-password">
           Forgot password?
         </Link>
