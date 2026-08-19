@@ -525,23 +525,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "projects_key_unique": {
-          "name": "projects_key_unique",
-          "columns": [
-            {
-              "expression": "key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "projects_created_by_users_id_fk": {
           "name": "projects_created_by_users_id_fk",
