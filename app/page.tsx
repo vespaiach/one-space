@@ -1,9 +1,5 @@
-import * as stylex from "@stylexjs/stylex";
+import { redirect } from "next/navigation";
 
-const styles = stylex.create({
-  container: { padding: "1rem" },
-});
-
-export default function MyComponent() {
-  return <div {...stylex.props(styles.container)}>Hello</div>;
+export default function HomePage() {
+  redirect("/users");
 }

@@ -25,7 +25,7 @@ Because accounts are not deleted, no deleted-account legal-retention exception o
 
 ## GOV-003 — Sharp approval request
 
-**Status**: Pending feature-owner approval
+**Status**: Approved
 
 The plan proposes adding `sharp` as a direct dependency to implement FR-061 image decoding, dimension and animation checks, metadata removal, aspect-preserving resize, and JPEG/PNG re-encoding.
 
@@ -34,11 +34,11 @@ The plan proposes adding `sharp` as a direct dependency to implement FR-061 imag
 - **Why Next.js is insufficient**: Next.js currently installs `sharp` transitively for its own image pipeline, but a transitive dependency is not a stable application import contract and cannot replace a declared, reviewed dependency.
 - **Scope limit**: Use is isolated to `lib/avatar/processor.ts`; no image editing features are approved.
 
-Implementation MUST NOT add or import `sharp` until this decision is explicitly changed to Approved.
+The feature may add and import `sharp` within the scope above.
 
 ## GOV-004 — axe-core approval request
 
-**Status**: Pending feature-owner approval
+**Status**: Approved
 
 The plan proposes adding `axe-core` as a development dependency for SC-016 automated accessibility checks.
 
@@ -46,11 +46,11 @@ The plan proposes adding `axe-core` as a development dependency for SC-016 autom
 - **Built-in alternative**: Testing Library and jsdom provide DOM behavior but no WCAG rules engine or critical/serious finding classification.
 - **Scope limit**: Test-only use under `tests/accessibility/`; manual keyboard, screen-reader, focus, zoom, and error-identification checks remain required.
 
-Implementation MUST NOT add `axe-core` until this decision is explicitly changed to Approved.
+The feature may add `axe-core` as a test-only dependency within the scope above.
 
 ## GOV-005 — Nodemailer TypeScript declarations approval request
 
-**Status**: Pending feature-owner approval
+**Status**: Approved
 
 The approved Nodemailer package does not publish bundled TypeScript declarations. The plan proposes adding `@types/nodemailer` as a development dependency so the SMTP adapter remains fully typed under the constitution's strict TypeScript and no-`any` requirements.
 
@@ -59,4 +59,4 @@ The approved Nodemailer package does not publish bundled TypeScript declarations
 - **Rejected workaround**: A handwritten partial ambient module would duplicate a third-party API, drift independently, and weaken review of SMTP options/results.
 - **Scope limit**: Development/compilation only; it adds no runtime email implementation or provider SDK.
 
-Implementation MUST NOT add `@types/nodemailer` until this decision is explicitly changed to Approved.
+The feature may add `@types/nodemailer` as a development-only dependency within the scope above.

@@ -19,19 +19,27 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
+*.tmp
+*.swp
+.vscode/
+.idea/
 
 # debug
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
 # env files
-.env
+.env*
+!.env.example
 
 # Traefik certificate storage
 /traefik/acme.json

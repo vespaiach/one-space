@@ -32,3 +32,5 @@
 ## Notes
 
 All items pass. Spec updated 2026-08-17 to adopt stateless invitation links: removed server-side invitation state (FR-008 deleted), revocation support, and duplicate-invitation check. Validity at registration time is now defined as: link not expired AND email not yet registered.
+
+Implementation evidence as of 2026-08-18 is recorded under `../evidence/`. Automated and local rendered checks pass. Production-equivalent performance, full manual WCAG, live HTTPS/SMTP, Docker volume persistence, backup creation, and isolated quarterly restore remain open and are not implied by this specification-quality checklist.
