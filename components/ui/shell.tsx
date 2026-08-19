@@ -446,7 +446,7 @@ export function Shell({ children, isAdmin = false, projects = [], members = [] }
               ))}
             </ul>
           </nav>
-          
+
           <div {...stylex.props(styles.navSeparator)}>
             <hr {...stylex.props(styles.navSeparatorLine)} />
           </div>

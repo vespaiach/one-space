@@ -19,5 +19,12 @@ const MEMBERS = [
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
-  return <Shell members={MEMBERS} projects={PROJECTS} isAdmin={session.role === "admin"}>{children}</Shell>;
+  return (
+    <Shell
+      members={MEMBERS}
+      projects={PROJECTS}
+      isAdmin={session.role === "admin"}>
+      {children}
+    </Shell>
+  );
 }
