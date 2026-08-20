@@ -9,7 +9,7 @@ import IconHome from "@/components/icons/home";
 import IconLogo from "@/components/icons/logo";
 import IconLogOut from "@/components/icons/logout";
 import IconSmallPlus from "@/components/icons/small-plus";
-import IconUserPlus from "@/components/icons/user-plus";
+import IconUsers from "@/components/icons/users";
 import { colors, layer, layout, motion, radius, space, structure, type } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -140,6 +140,13 @@ const styles = stylex.create({
     justifyContent: structure.alignCenter,
     paddingInline: space.s1,
     lineHeight: "1",
+  },
+
+  navCount: {
+    marginLeft: structure.auto,
+    fontSize: type.size2xs,
+    color: colors.mutedForeground,
+    fontVariantNumeric: "tabular-nums",
   },
 
   projectsSection: {
@@ -382,6 +389,7 @@ type ShellProps = {
     bg: string;
   }>;
   notificationCount?: number;
+  memberCount?: number;
 };
 
 export function Shell({
@@ -390,6 +398,7 @@ export function Shell({
   projects = [],
   members = [],
   notificationCount = 0,
+  memberCount = 0,
 }: ShellProps) {
   const pathname = usePathname();
 
@@ -428,12 +437,14 @@ export function Shell({
           <nav {...stylex.props(styles.projectsSection)}>
             <div {...stylex.props(styles.projectsHeader)}>
               <span {...stylex.props(styles.projectsLabel)}>Projects</span>
-              <button
-                type="button"
-                {...stylex.props(styles.projectAddBtn)}
-                aria-label="Add project">
-                <IconSmallPlus />
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  {...stylex.props(styles.projectAddBtn)}
+                  aria-label="Add project">
+                  <IconSmallPlus />
+                </button>
+              )}
             </div>
             <ul>
               {projects.map((p) => (
@@ -473,13 +484,11 @@ export function Shell({
             </Link>
             {isAdmin && (
               <Link
-                href="/admin/invitations"
-                {...stylex.props(
-                  styles.navItem,
-                  pathname.startsWith("/admin/invitations") && styles.navItemActive,
-                )}>
-                <IconUserPlus />
-                Invite member
+                href="/users"
+                {...stylex.props(styles.navItem, pathname.startsWith("/users") && styles.navItemActive)}>
+                <IconUsers />
+                Members
+                <span {...stylex.props(styles.navCount)}>{memberCount}</span>
               </Link>
             )}
           </nav>

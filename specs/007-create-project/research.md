@@ -90,3 +90,17 @@ When `marked` is approved, the rendering path is: `marked.parse(description)` on
 
 - Date-picker library: rejected — no spec requirement for calendar UI; native input satisfies SC-001 (under 90 seconds); avoids a new dependency.
 - JavaScript `Date` object comparison: usable but unnecessary — string comparison of `YYYY-MM-DD` is lexicographically equivalent and avoids timezone issues introduced by `new Date()`.
+
+## 6. Member Picker — Search and Atomicity Strategy
+
+**Decision**: Pre-load the user list in the Server Component at page render time; perform client-side in-memory search within `CreateProjectForm`. Submit selected user IDs as `memberIds[]` form entries. Wrap the `projects` insert and all `project_members` inserts in a single Drizzle transaction.
+
+**Rationale**: The deployment is single-instance with ~20 users — pre-loading the entire user list (minus the creating admin) adds negligible payload and eliminates the need for a separate search API endpoint or Server Action for the picker. Client-side filtering over ~20 records is instant and requires no debounce or loading state. This is the simplest approach consistent with Principle III.
+
+Drizzle ORM's `db.transaction()` API wraps the multi-statement write in a single PostgreSQL transaction, satisfying FR-011's atomicity requirement (no partial membership state if the DB operation fails mid-way).
+
+**Alternatives considered**:
+
+- Dedicated search Server Action with debounced client calls: rejected — adds an unnecessary round-trip and loader state for a dataset of ~20 users. Appropriate only when the user list exceeds a few hundred rows.
+- Pre-load users client-side via `useEffect` on mount: rejected — the Server Component already has the data; passing it as a prop avoids a client-side fetch entirely and removes loading flicker.
+- Separate `project_members` inserts outside a transaction: rejected — any failure after the `projects` insert would leave an orphan project with no members, violating FR-011's atomicity requirement.

@@ -110,6 +110,36 @@ This guide describes runnable validation scenarios that prove the feature works 
 
 **Expected**: The key field remains `"MKTG"` — the manual edit is preserved. The auto-generation does not overwrite a user-modified key.
 
+## Scenario 8 — Admin Adds Members During Project Creation (FR-011, FR-012, SC-006, User Story 3)
+
+**Setup**:
+- Log in as admin.
+- Ensure at least two other registered users exist (one member-role, one admin-role).
+
+**Steps**:
+1. Navigate to `/projects/new`.
+2. Fill all required fields (name `"Alpha Team"`, key `"AT"`, description, color, start date).
+3. In the Members picker, type the first few letters of another user's name.
+4. Verify matching users appear as selectable options (both member-role and admin-role users shown; the creating admin is absent from results).
+5. Select two users.
+6. Verify selected users appear as dismissible chips.
+7. Remove one chip.
+8. Submit.
+
+**Expected**:
+- Project `"Alpha Team"` is created and appears in the project list.
+- The one remaining selected user appears as a member of the project.
+- The removed user is NOT a member of the project.
+- The creating admin is NOT listed as a selectable option in the picker (SC-006: zero members added beyond selection).
+
+**Also verify** (no members selected):
+1. Submit the creation form without selecting any members.
+2. Project is created with an empty member list.
+
+**Also verify** (non-admin bypass attempt — FR-012):
+1. Craft a POST to `createProject` with a non-admin session token and a `memberIds[]` entry.
+2. The action rejects with an unauthorized result. No project row or membership row is inserted.
+
 ## Integration Test Commands
 
 ```bash

@@ -33,6 +33,7 @@ Authorization calls `requireAdmin()` from `lib/auth/` before any data load or re
 | Color | Swatch picker | Yes | Twelve color swatches from the hardcoded `projectColors` palette (red, coral, orange, amber, yellow, lime, green, teal, sky, blue, purple, pink); selected swatch is visually highlighted |
 | Start Date | Date input | Yes | Native `<input type="date">` |
 | End Date | Date input | No | Native `<input type="date">`; shown with an "(optional)" label |
+| Members | Multi-select picker | No | Shown with an "(optional)" label; lists all registered users except the creating admin; searchable by name or email; zero or more users may be selected; selected users shown as dismissible chips |
 | Submit | Button | — | "Create Project"; disabled while submission is in progress |
 
 **Key auto-generation behavior** (Client Component `CreateProjectForm`):
@@ -41,6 +42,14 @@ Authorization calls `requireAdmin()` from `lib/auth/` before any data load or re
 2. Once the user manually edits the key field, a dirty flag is set; subsequent name changes do not overwrite the key.
 3. The key is uppercased automatically on input (the component enforces uppercase display; the action validates the format).
 4. Key availability is not checked client-side — the action handles conflict detection and returns an error if the chosen key exists.
+
+**Member picker behavior** (Client Component `CreateProjectForm`):
+
+- The page Server Component queries all users except the authenticated admin at render time and passes the list as a prop to `CreateProjectForm`.
+- The client component filters this in-memory list as the admin types — no additional server round-trip is required.
+- The picker searches across the user's full name and email address.
+- Selected users are represented as dismissible chips above the search input; their IDs are submitted as `memberIds[]` form entries.
+- If the search query matches no users, the picker shows a "No users found" message.
 
 **Submit**: `createProject`. On success, the action redirects to `/projects` (the project list). On failure, the action returns a discriminated error result and the form re-renders with per-field error messages.
 

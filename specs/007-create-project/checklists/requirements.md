@@ -32,3 +32,4 @@
 ## Notes
 
 - Roadmap and milestones removed from the project entity per user decision — they are out of scope for project creation.
+- 2026-08-20: Amended to add member-picker capability (FR-011, FR-012, SC-006, User Story 3, Key Entity: Project Membership, 2 new edge cases, member-picker assumptions). All checklist items remain passing.

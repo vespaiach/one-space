@@ -10,11 +10,11 @@ Expected business failures return a discriminated, field-safe result object. Sec
 
 ### `createProject(formData)`
 
-**Inputs**: `name`, `key`, `description`, `color`, `startDate`, `endDate` (optional).
+**Inputs**: `name`, `key`, `description`, `color`, `startDate`, `endDate` (optional), `memberIds` (zero or more user UUIDs; optional, defaults to empty).
 
 **Order**:
 
-1. Call `requireAdmin()`. Reject with a 401/redirect if the session is invalid; reject with a 403 result if the session belongs to a non-admin.
+1. Call `requireAdmin()`. Reject with a 401/redirect if the session is invalid; reject with a 403 result if the session belongs to a non-admin. Capture the authenticated admin's `userId` for use in steps 4 and 5.
 
 2. Extract and trim all string inputs. Validate:
    - `name`: non-empty after trim; 1–255 characters.
@@ -23,10 +23,14 @@ Expected business failures return a discriminated, field-safe result object. Sec
    - `color`: one of the twelve allowed token keys (`red`, `coral`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `sky`, `blue`, `purple`, `pink`). Return a field error for any other value.
    - `startDate`: valid `YYYY-MM-DD` string; must parse as a real calendar date.
    - `endDate`: when present, valid `YYYY-MM-DD` string; must be strictly after `startDate` (string comparison is sufficient for ISO 8601 dates; both are validated to be real dates first).
+   - `memberIds`: must be an array of strings (may be empty); each element must be a valid UUID format. Silently filter out any ID equal to the authenticated admin's own `userId` (prevents self-membership). Any remaining ID that does not correspond to an existing user row is silently dropped (race condition: user deleted between selection and submit).
 
 3. Check key uniqueness: query `projects` for a row with the given `key`. If found, return a field error for `key`: "This key is already in use. Choose a different one."
 
-4. Insert one row into `projects` with all validated values plus `created_by` set to the authenticated admin's user ID and `created_at` / `updated_at` set to the current timestamp.
+4. Open a database transaction. Within the transaction:
+   a. Insert one row into `projects` with all validated values plus `created_by` set to the authenticated admin's `userId` and `created_at` / `updated_at` set to the current timestamp. Capture the new `project.id`.
+   b. For each valid `userId` in the filtered `memberIds` list, insert one row into `project_members` with `project_id = project.id`, `user_id = userId`, `created_at = now()`.
+   Commit. If any insert fails, roll back the entire transaction — no partial state is persisted.
 
 5. Invalidate any cached reads covering the project list.
 
@@ -45,7 +49,9 @@ Expected business failures return a discriminated, field-safe result object. Sec
 | `startDate` | Missing or invalid | "A valid start date is required" |
 | `endDate` | Not after startDate | "End date must be after the start date" |
 
-**No partial effects**: If validation fails before the insert, no row is written. The insert is a single statement with no preceding side effects that need rollback.
+`memberIds` validation errors (self-submission, non-existent user) are silently corrected rather than rejected — the form does not surface a field error for these cases.
+
+**No partial effects**: If validation fails before the transaction opens, no rows are written. If the transaction fails, both the `projects` and `project_members` inserts are rolled back.
 
 **Audit**: No separate audit event is required for project creation in this feature (no security-sensitive operation). A future audit trail feature may add one.
 

@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "only admin can create a project. A project has name, description, color, start date, end date, key/id (short for easy to memorize). key/id, name, description, color, start date are required. Description field supports basic markdown"
+**Input**: User description: "only admin can create a project. A project has name, description, color, start date, end date, key/id (short for easy to memorize). key/id, name, description, color, start date are required. Description field supports basic markdown. Admin can add members to the project while creating it."
 
 ## Clarifications
 
@@ -60,7 +60,25 @@ An admin creates a project and additionally provides an end date to define the p
 
 ---
 
-### User Story 3 - Non-Admin Cannot Create a Project (Priority: P1)
+### User Story 3 - Admin Adds Members During Project Creation (Priority: P2)
+
+An admin selects one or more existing members to add to the project while filling in the creation form. The selected members immediately have access to the project upon creation.
+
+**Why this priority**: Adding members during creation is a convenience enhancement — it saves a separate "manage members" step but is not required for the project to be functional. The project can always be created first and members added afterward.
+
+**Independent Test**: Can be fully tested by creating a project with two or more members selected and verifying all selected members appear in the project's member list after creation.
+
+**Acceptance Scenarios**:
+
+1. **Given** a logged-in admin on the project creation form, **When** they search for a registered user by name or email, **Then** matching users are shown as selectable options in the member picker.
+2. **Given** a logged-in admin, **When** they select one or more members and submit the creation form successfully, **Then** each selected member is associated with the newly created project and can access it.
+3. **Given** a logged-in admin, **When** they submit the creation form without selecting any members, **Then** the project is created with no initial members (the member list is empty, admin excluded).
+4. **Given** a project creation form with members selected, **When** the admin removes a selection before submitting, **Then** the removed user is not added to the project.
+5. **Given** a logged-in admin, **When** they search the member picker, **Then** users with the admin role are included from the results, but excluded the logged-in admin itself.
+
+---
+
+### User Story 5 - Non-Admin Cannot Create a Project (Priority: P1)
 
 A non-admin user (regular member or guest) has no ability to create a project. The creation path is entirely inaccessible to them.
 
@@ -84,6 +102,8 @@ A non-admin user (regular member or guest) has no ability to create a project. T
 - What happens if a user's admin role is revoked while they have the creation form open?
 - What happens if the admin's session expires while the creation form is open and they then submit? → The server action's `requireAdmin()` rejects the expired session; the admin is redirected to the login page and no project data is saved.
 - What happens if two admins simultaneously submit with the same auto-generated key (race condition)? → The database's `UNIQUE` constraint on `key` ensures exactly one insert succeeds; the concurrent request receives the uniqueness violation mapped to the standard field error: "This key is already in use. Choose a different one."
+- What happens if a member selected in the picker is deactivated or deleted between the time they were selected and the form is submitted? → The server action validates each submitted member ID at save time; any invalid or non-existent IDs are silently skipped and the project is created with only the valid members persisted.
+- What happens if the admin searches for a member but no results are found? → The picker displays a "No members found" message; the admin may clear the search or submit with no members selected.
 
 ## Requirements *(mandatory)*
 
@@ -99,10 +119,13 @@ A non-admin user (regular member or guest) has no ability to create a project. T
 - **FR-008**: A successfully created project MUST be immediately accessible to the creating admin.
 - **FR-009**: The system MUST display actionable validation errors for each failing field when a submission is rejected. Canonical error message texts are defined in `contracts/server-actions.md` and are the authoritative reference. If a server-side exception occurs (e.g., DB insert failure unrelated to validation), the system MUST display a generic form-level message ("Something went wrong. Please try again.") without resetting any field values.
 - **FR-010**: The project key/id MUST be editable by the admin before submission but MUST default to an auto-suggestion derived from the project name using the following algorithm: (1) take the first letter of each word, uppercased; (2) if the result is fewer than 2 characters, append leading characters from the first word until the minimum length of 2 is reached (e.g., "Marketing" → "MA"); (3) truncate to 6 characters. The auto-generated key is presented to the admin as-is, without a client-side uniqueness check. If the submitted key is already in use, the server action MUST return a field-level validation error; the admin must choose a different key.
+- **FR-011**: The project creation form MUST include an optional member picker allowing the admin to select zero or more users to associate with the project at creation time. The picker MUST list all registered users except the creating admin. The picker MUST support search by name or email. If no users are selected, the project is created with an empty member list. All selected users MUST be persisted as project members atomically with the project creation — partial membership saves are not permitted.
+- **FR-012**: Adding members during creation is subject to the same access control as the rest of the form: only admins can invoke this action. Attempts by non-admins to submit member selections alongside crafted create-project requests MUST be rejected by the server action before any data is written.
 
 ### Key Entities
 
 - **Project**: Represents a unit of organized work. Key attributes: key/id (unique, short, uppercase alphanumeric), name, description (markdown-enabled text), color (visual identifier), start date, end date (optional).
+- **Project Membership**: An association between a project and a member. Established at creation time (via FR-011) or managed separately post-creation. An admin creating a project may pre-populate zero or more memberships; absence of any selection is valid.
 
 ## Success Criteria *(mandatory)*
 
@@ -113,6 +136,7 @@ A non-admin user (regular member or guest) has no ability to create a project. T
 - **SC-003**: All required-field validation errors are surfaced inline on the form before submission reaches the server.
 - **SC-004**: A newly created project appears in the project list within 2 seconds of successful submission.
 - **SC-005**: The description markdown preview (if shown) renders correctly for all supported markdown elements.
+- **SC-006**: All members selected in the picker are associated with the project upon creation — zero members are silently dropped or added beyond the admin's selection.
 
 ## Assumptions
 
@@ -138,7 +162,12 @@ A non-admin user (regular member or guest) has no ability to create a project. T
 - No lower bound is imposed on the start date — a project may be created retroactively with a past start date.
 - The color swatch picker is keyboard-navigable: arrow keys move focus between swatches (roving tabindex), Enter or Space selects the focused swatch, and Tab moves focus out of the swatch group.
 - Each color swatch is announced to screen readers by its color name (e.g., `aria-label="amber"`). The currently selected swatch has `aria-checked="true"` (radio group) or `aria-pressed="true"` (toggle button).
-- The keyboard focus order across the creation form is: Project Name → Project Key → Description → Color picker (first swatch, then arrow-key navigation within) → Start Date → End Date → Submit.
 - CSRF protection is provided by Next.js Server Actions' built-in origin verification. Explicit rate limiting is not required — the form is admin-only and usage volume is negligible.
 - The key format hint ("2–6 uppercase letters/digits") is rendered in a `<span>` with a unique `id` referenced by `aria-describedby` on the key input, so screen readers announce the constraint when the field receives focus.
 - Markdown rendering via `marked` runs server-side in a Server Component. The HTML output is sanitized before passing to `dangerouslySetInnerHTML` — via `marked`'s built-in sanitization options or `DOMPurify` — permitting only the HTML elements corresponding to the supported syntax in FR-006.
+- The member picker is an optional inline multi-select within the creation form; it does not navigate away or open a modal that disrupts other field values.
+- The member picker lists all registered users except the creating admin. Both admin-role and member-role users are selectable (the creating admin is excluded because self-membership at creation is redundant — the admin already owns and can access the project).
+- Project membership created at project-creation time carries no special status beyond standard membership — members added here have the same access as members added through a separate member-management flow.
+- The member picker does not enforce a maximum member count at creation time. Any reasonable number of members may be selected.
+- Project and member associations are saved in a single atomic operation. If the DB insert for any membership fails, the entire creation is rolled back and a generic form-level error is shown (see FR-009).
+- The keyboard focus order across the creation form extends to: Project Name → Project Key → Description → Color picker → Start Date → End Date → Member Picker → Submit.
