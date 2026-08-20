@@ -3,12 +3,12 @@ import { notFound } from "next/navigation";
 import { AddProjectMemberForm } from "@/components/projects/members/add-project-member-form";
 import { ProjectMemberList } from "@/components/projects/members/project-member-list";
 import { ProjectSettingsNavigation } from "@/components/projects/project-settings-navigation";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requireAdminOrForbidden } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { getMembershipManagementData } from "@/lib/db/queries/project-members";
 
 export default async function ProjectMembersPage({ params }: { params: Promise<{ projectKey: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireAdminOrForbidden();
   const { projectKey } = await params;
   const data = await getMembershipManagementData(db, projectKey, admin.userId);
   if (!data) notFound();

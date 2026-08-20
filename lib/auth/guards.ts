@@ -1,3 +1,4 @@
+import { forbidden } from "next/navigation";
 import { getCurrentForcedReset, getCurrentSession } from "@/lib/auth/session";
 import type { ForcedResetContext, SessionContext } from "@/lib/db/queries/sessions";
 
@@ -20,6 +21,17 @@ export async function requireAdmin(
   const current = await requireSession(context);
   if (current.role !== "admin") throw new AuthorizationError("forbidden");
   return { ...current, role: "admin" };
+}
+
+export async function requireAdminOrForbidden(
+  context?: SessionContext | null,
+): Promise<SessionContext & { role: "admin" }> {
+  try {
+    return await requireAdmin(context);
+  } catch (error) {
+    if (error instanceof AuthorizationError && error.code === "forbidden") forbidden();
+    throw error;
+  }
 }
 
 export async function requireForcedReset(context?: ForcedResetContext | null): Promise<ForcedResetContext> {

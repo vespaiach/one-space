@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { asc, ne } from "drizzle-orm";
 import { CreateProjectForm } from "@/components/projects/create-project-form";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requireAdminOrForbidden } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { colors, space, structure, type } from "@/styles/tokens.stylex";
@@ -31,7 +31,7 @@ const styles = stylex.create({
 });
 
 export default async function NewProjectPage() {
-  const admin = await requireAdmin();
+  const admin = await requireAdminOrForbidden();
 
   const availableUsers = await db
     .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email })

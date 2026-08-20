@@ -1,5 +1,5 @@
 import { InvitationForm } from "@/components/auth/invitation-form";
-import { requireAdmin } from "@/lib/auth/guards";
+import { requireAdminOrForbidden } from "@/lib/auth/guards";
 import { getEmailCapability } from "@/lib/email/smtp";
 
 export default async function InvitationsPage({
@@ -7,7 +7,7 @@ export default async function InvitationsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireAdmin();
+  await requireAdminOrForbidden();
   const { result } = await searchParams;
   return (
     <section>
