@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDatabase, truncateFeatureTables } from "@/tests/helpers/database";
-import { projects, users } from "@/lib/db/schema";
+import { projectMembers, projects, users } from "@/lib/db/schema";
 
 // --- Module mocks (hoisted before imports) ---
 
@@ -294,5 +295,174 @@ describe("createProject — end date (US2)", () => {
 
     const [row] = await database.db.select().from(projects);
     expect(row.endDate).toBeNull();
+  });
+});
+
+// --- Phase 6 / T023: Member Insertion (US3) ---
+
+async function seedSecondMember() {
+  const [member] = await database.db
+    .insert(users)
+    .values({
+      email: "member2@example.com",
+      passwordHash: "hash",
+      firstName: "Second",
+      lastName: "Member",
+      role: "member",
+    })
+    .returning();
+  return member;
+}
+
+describe("createProject — member insertion (US3)", () => {
+  let admin: Awaited<ReturnType<typeof seedAdmin>>;
+
+  beforeEach(async () => {
+    await truncateFeatureTables(database.client);
+    _actionDb = database.db;
+    mockGetCurrentSession.mockReset();
+    mockRevalidatePath.mockReset();
+    mockRedirect.mockReset();
+    admin = await seedAdmin();
+    mockGetCurrentSession.mockResolvedValue({ userId: admin.id, role: "admin", sessionId: "s" });
+  });
+
+  it("inserts two project_members rows for two valid memberIds", async () => {
+    const member1 = await seedMember();
+    const member2 = await seedSecondMember();
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Team Project");
+    formData.set("key", "TEAM");
+    formData.set("description", "desc");
+    formData.set("color", "blue");
+    formData.set("startDate", "2026-09-01");
+    formData.append("memberIds[]", member1.id);
+    formData.append("memberIds[]", member2.id);
+
+    await expect(createProject(null, formData)).rejects.toThrow("NEXT_REDIRECT");
+
+    const [project] = await database.db.select().from(projects);
+    const members = await database.db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, project.id));
+    expect(members).toHaveLength(2);
+    expect(members.map((m) => m.userId)).toContain(member1.id);
+    expect(members.map((m) => m.userId)).toContain(member2.id);
+  });
+
+  it("inserts no project_members rows when no memberIds submitted", async () => {
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Solo Project");
+    formData.set("key", "SOLO");
+    formData.set("description", "desc");
+    formData.set("color", "red");
+    formData.set("startDate", "2026-09-01");
+
+    await expect(createProject(null, formData)).rejects.toThrow("NEXT_REDIRECT");
+
+    const [project] = await database.db.select().from(projects);
+    const members = await database.db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, project.id));
+    expect(members).toHaveLength(0);
+  });
+
+  it("silently drops admin's own UUID from memberIds", async () => {
+    const member = await seedMember();
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Admin Self Project");
+    formData.set("key", "SELF");
+    formData.set("description", "desc");
+    formData.set("color", "green");
+    formData.set("startDate", "2026-09-01");
+    formData.append("memberIds[]", admin.id);
+    formData.append("memberIds[]", member.id);
+
+    await expect(createProject(null, formData)).rejects.toThrow("NEXT_REDIRECT");
+
+    const [project] = await database.db.select().from(projects);
+    const members = await database.db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, project.id));
+    expect(members).toHaveLength(1);
+    expect(members[0].userId).toBe(member.id);
+    expect(members.map((m) => m.userId)).not.toContain(admin.id);
+  });
+
+  it("silently drops non-existent UUID and inserts remaining valid member", async () => {
+    const member = await seedMember();
+    const nonExistentUuid = "00000000-0000-0000-0000-000000000001";
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Filter Project");
+    formData.set("key", "FILT");
+    formData.set("description", "desc");
+    formData.set("color", "teal");
+    formData.set("startDate", "2026-09-01");
+    formData.append("memberIds[]", member.id);
+    formData.append("memberIds[]", nonExistentUuid);
+
+    await expect(createProject(null, formData)).rejects.toThrow("NEXT_REDIRECT");
+
+    const [project] = await database.db.select().from(projects);
+    const members = await database.db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, project.id));
+    expect(members).toHaveLength(1);
+    expect(members[0].userId).toBe(member.id);
+  });
+
+  it("rolls back the projects row when project_members insert fails", async () => {
+    const member = await seedMember();
+    const realDb = database.db;
+
+    _actionDb = new Proxy(realDb, {
+      get(target, prop) {
+        if (prop === "transaction") {
+          return async (_fn: unknown) => {
+            throw new Error("Simulated project_members insert failure");
+          };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (target as any)[prop];
+      },
+    }) as typeof realDb;
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Rollback Project");
+    formData.set("key", "RBK");
+    formData.set("description", "desc");
+    formData.set("color", "purple");
+    formData.set("startDate", "2026-09-01");
+    formData.append("memberIds[]", member.id);
+
+    await expect(createProject(null, formData)).rejects.toThrow();
+
+    const projectRows = await realDb.select().from(projects);
+    expect(projectRows).toHaveLength(0);
   });
 });

@@ -59,15 +59,74 @@ const styles = stylex.create({
   swatchSelected: { borderColor: colors.foreground },
   swatchUnselected: { borderColor: colors.border },
   fieldGroup: { display: structure.grid, gap: space.s2 },
+  pickerSearch: {
+    width: structure.widthFull,
+    borderColor: colors.input,
+    borderRadius: radius.lg,
+    borderStyle: structure.borderSolid,
+    borderWidth: layout.focusRingWidth,
+    backgroundColor: colors.card,
+    paddingBlock: space.s4,
+    paddingInline: space.s5,
+  },
+  pickerList: {
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderStyle: structure.borderSolid,
+    borderWidth: layout.focusRingWidth,
+    backgroundColor: colors.card,
+    maxHeight: "12rem",
+    overflowY: "auto",
+  },
+  pickerItem: {
+    paddingBlock: space.s3,
+    paddingInline: space.s4,
+    cursor: "pointer",
+    display: structure.flex,
+    gap: space.s2,
+    alignItems: "center",
+  },
+  chipList: { display: structure.flex, gap: space.s2, flexWrap: "wrap" },
+  chip: {
+    display: structure.flex,
+    alignItems: "center",
+    gap: space.s2,
+    borderRadius: radius.lg,
+    borderColor: colors.border,
+    borderStyle: structure.borderSolid,
+    borderWidth: layout.focusRingWidth,
+    backgroundColor: colors.card,
+    paddingBlock: space.s2,
+    paddingInline: space.s3,
+    fontSize: type.sizeSm,
+  },
+  chipDismiss: {
+    cursor: "pointer",
+    backgroundColor: "transparent",
+    borderWidth: "0px",
+    padding: "0px",
+    display: structure.flex,
+    alignItems: "center",
+  },
+  noResults: {
+    color: colors.textSecondary,
+    fontSize: type.sizeSm,
+    paddingBlock: space.s3,
+    paddingInline: space.s4,
+  },
 });
 
 type Color = (typeof COLORS)[number];
 
-export function CreateProjectForm() {
+type PickerUser = { id: string; name: string; email: string };
+
+export function CreateProjectForm({ availableUsers = [] }: { availableUsers?: PickerUser[] }) {
   const [state, action, isPending] = useActionState(createProject, null);
   const keyDirty = useRef(false);
   const keyRef = useRef<HTMLInputElement>(null);
   const [selectedColor, setSelectedColor] = useState<Color>("red");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<PickerUser[]>([]);
 
   function handleNameBlur(e: React.FocusEvent<HTMLInputElement>) {
     if (!keyDirty.current && keyRef.current) {
@@ -79,6 +138,23 @@ export function CreateProjectForm() {
     keyDirty.current = true;
     e.target.value = e.target.value.toUpperCase();
   }
+
+  function handleAddUser(user: PickerUser) {
+    setSelectedUsers((prev) => [...prev, user]);
+    setSearchQuery("");
+  }
+
+  function handleRemoveUser(userId: string) {
+    setSelectedUsers((prev) => prev.filter((u) => u.id !== userId));
+  }
+
+  const selectedIds = new Set(selectedUsers.map((u) => u.id));
+  const lowerQuery = searchQuery.toLowerCase();
+  const filteredUsers = availableUsers.filter(
+    (u) =>
+      !selectedIds.has(u.id) &&
+      (u.name.toLowerCase().includes(lowerQuery) || u.email.toLowerCase().includes(lowerQuery)),
+  );
 
   const fieldErrors = state && "fieldErrors" in state ? state.fieldErrors : undefined;
 
@@ -251,6 +327,62 @@ export function CreateProjectForm() {
           aria-invalid={Boolean(fieldErrors?.endDate)}
         />
       </div>
+
+      {availableUsers.length > 0 ? (
+        <div {...stylex.props(styles.fieldGroup)}>
+          <span {...stylex.props(styles.label)}>Members</span>
+          {selectedUsers.length > 0 ? (
+            <div {...stylex.props(styles.chipList)}>
+              {selectedUsers.map((user) => (
+                <span
+                  key={user.id}
+                  data-chip
+                  {...stylex.props(styles.chip)}>
+                  <input
+                    type="hidden"
+                    name="memberIds[]"
+                    value={user.id}
+                  />
+                  {user.name}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${user.name}`}
+                    {...stylex.props(styles.chipDismiss)}
+                    onClick={() => handleRemoveUser(user.id)}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <input
+            {...stylex.props(styles.pickerSearch)}
+            type="text"
+            placeholder="Search members..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {filteredUsers.length > 0 ? (
+            <ul {...stylex.props(styles.pickerList)}>
+              {filteredUsers.map((user) => (
+                <li key={user.id}>
+                  <button
+                    type="button"
+                    {...stylex.props(styles.pickerItem)}
+                    onClick={() => handleAddUser(user)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") handleAddUser(user);
+                    }}>
+                    {user.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : searchQuery ? (
+            <p {...stylex.props(styles.noResults)}>No users found</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <Button
         type="submit"

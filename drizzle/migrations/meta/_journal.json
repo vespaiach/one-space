@@ -22,6 +22,13 @@
       "when": 1787149041367,
       "tag": "0002_aspiring_ken_ellis",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787232242872,
+      "tag": "0003_late_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

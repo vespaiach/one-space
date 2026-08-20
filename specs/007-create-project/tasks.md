@@ -21,8 +21,8 @@
 - [X] T001 Add `projectColors` `defineVars` group to `styles/tokens.stylex.ts` with 12 tokens (see exact oklch values in `data-model.md`): `red`, `coral`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `sky`, `blue`, `purple`, `pink`
 - [X] T002 Create `lib/db/schema/projects.ts` defining `pgTable('projects', ...)` with columns: `id` UUID pk defaultRandom, `key` varchar(6) notNull unique, `name` varchar(255) notNull, `description` text notNull, `color` varchar(20) notNull, `start_date` date notNull, `end_date` date nullable, `created_by` UUID FK→users.id onDelete:'restrict' notNull, `created_at` and `updated_at` timestamptz notNull defaultNow
 - [X] T003 Add `export * from './projects'` to `lib/db/schema/index.ts`
-- [ ] T004 Create `lib/db/schema/project-members.ts` defining `pgTable('project_members', ...)` with columns: `project_id` UUID FK→projects.id onDelete:'cascade' notNull, `user_id` UUID FK→users.id onDelete:'restrict' notNull, `created_at` timestamptz notNull defaultNow; composite primary key on `(project_id, user_id)`; index on `user_id`
-- [ ] T005 Add `export * from './project-members'` to `lib/db/schema/index.ts`
+- [X] T004 Create `lib/db/schema/project-members.ts` defining `pgTable('project_members', ...)` with columns: `project_id` UUID FK→projects.id onDelete:'cascade' notNull, `user_id` UUID FK→users.id onDelete:'restrict' notNull, `created_at` timestamptz notNull defaultNow; composite primary key on `(project_id, user_id)`; index on `user_id`
+- [X] T005 Add `export * from './project-members'` to `lib/db/schema/index.ts`
 
 **Checkpoint**: Both schemas defined — run `npm run db:generate` to verify no Drizzle type errors.
 
@@ -38,8 +38,8 @@
 - [X] T007 [P] Write failing unit tests in `tests/unit/projects/key-generator.test.ts` covering `generateProjectKey`: (a) multi-word → first letters ("Marketing Campaign" → "MC"); (b) single-word → pad from first word ("Marketing" → "MA"); (c) truncation at 6 chars ("Alpha Beta Gamma Delta Epsilon Zeta" → "ABGDEZ"); (d) strip non-alphanumeric ("Hello-World" → "HW"); (e) symbols-only fallback ("!!!" → "PROJ"); (f) single letter word pads from first word ("A B" → "AB")
 - [X] T008 [P] Write failing unit tests in `tests/unit/projects/create-project-validation.test.ts` covering server-side validation rules: (a) key regex `/^[A-Z0-9]{2,6}$/` accepts "PROJ", rejects "proj", "P", "TOOLONG7", "P!"; (b) color allowlist accepts all 12 keys, rejects "gray", "black", ""; (c) date comparison rejects `endDate === startDate` and `endDate < startDate`; (d) blank/trim-to-empty name rejected; (e) description over 10 000 chars rejected
 - [X] T009 Implement `generateProjectKey(name: string): string` in `lib/projects/key-generator.ts` — make all T007 tests pass (Red → Green → Refactor)
-- [ ] T010 Run `npm run db:generate` to generate a new Drizzle migration for the `project_members` table (depends on T004–T005); commit the output migration file under `drizzle/migrations/`
-- [ ] T011 Apply migration to dev and test databases: `npm run db:migrate` and `DATABASE_URL=$DATABASE_URL_TEST npm run db:migrate`
+- [X] T010 Run `npm run db:generate` to generate a new Drizzle migration for the `project_members` table (depends on T004–T005); commit the output migration file under `drizzle/migrations/`
+- [X] T011 Apply migration to dev and test databases: `npm run db:migrate` and `DATABASE_URL=$DATABASE_URL_TEST npm run db:migrate`
 
 **Checkpoint**: `npm test tests/unit/projects/` passes. Both tables exist in dev and test DBs. Foundation ready.
 
@@ -104,14 +104,14 @@
 
 **Independent Test**: Create a project with 2 members selected → both rows in `project_members`; the creating admin's own ID is not in the picker; creating with no members → empty member list; `project_members` inserts roll back if the transaction fails.
 
-- [ ] T023 [P] [US3] Write failing integration tests in `tests/integration/projects/create-project.test.ts`: (a) admin submits with `memberIds` containing two valid user UUIDs → two rows inserted in `project_members` with correct `project_id`; (b) admin submits with no `memberIds` → `project_members` has zero rows for that project; (c) `memberIds` containing the creating admin's own UUID → that UUID is silently dropped, no self-membership row; (d) `memberIds` containing a non-existent UUID → that UUID is silently dropped, remaining valid UUIDs are inserted; (e) DB failure during `project_members` insert → `projects` row is also rolled back (no orphan project)
-- [ ] T024 [P] [US3] Write failing component test in `tests/unit/projects/create-project-form.test.tsx`: (a) member picker renders a list of `availableUsers` prop; (b) typing "ali" filters the list to users whose name or email contains "ali" (case-insensitive); (c) clicking a user adds a chip and removes that user from the dropdown; (d) clicking the dismiss icon on a chip removes it and returns the user to the dropdown; (e) selected user IDs appear as `memberIds[]` hidden inputs in the submitted form data
+- [X] T023 [P] [US3] Write failing integration tests in `tests/integration/projects/create-project.test.ts`: (a) admin submits with `memberIds` containing two valid user UUIDs → two rows inserted in `project_members` with correct `project_id`; (b) admin submits with no `memberIds` → `project_members` has zero rows for that project; (c) `memberIds` containing the creating admin's own UUID → that UUID is silently dropped, no self-membership row; (d) `memberIds` containing a non-existent UUID → that UUID is silently dropped, remaining valid UUIDs are inserted; (e) DB failure during `project_members` insert → `projects` row is also rolled back (no orphan project)
+- [X] T024 [P] [US3] Write failing component test in `tests/unit/projects/create-project-form.test.tsx`: (a) member picker renders a list of `availableUsers` prop; (b) typing "ali" filters the list to users whose name or email contains "ali" (case-insensitive); (c) clicking a user adds a chip and removes that user from the dropdown; (d) clicking the dismiss icon on a chip removes it and returns the user to the dropdown; (e) selected user IDs appear as `memberIds[]` hidden inputs in the submitted form data
 
 > **⚠️ Write tests first. They must fail. Then implement T025–T027.**
 
-- [ ] T025 [US3] Extend `createProject` in `app/actions/projects.ts`: (1) extract `memberIds[]` array from FormData; (2) parse as UUIDs, filter out the creating admin's own `userId` and any UUID not found in the `users` table; (3) wrap the `projects` insert and all `project_members` inserts in a single `db.transaction(...)` call; (4) on commit, proceed to `revalidatePath`/`redirect` as before — make T023 tests pass
-- [ ] T026 [US3] Extend `app/(shell)/projects/new/page.tsx`: after `requireAdmin()`, query all users where `id ≠ adminUserId` ordered by name; pass as `availableUsers: { id: string; name: string; email: string }[]` prop to `<CreateProjectForm>` — make T024 picker-render test pass
-- [ ] T027 [US3] Implement member picker in `components/projects/create-project-form.tsx`: add `availableUsers` prop; render a search `<input>` that filters `availableUsers` in-memory by name and email (case-insensitive substring match); render filtered results as a clickable list; on click, move user to a `selectedUsers` state array and render as a dismissible chip (`name` visible, `id` as `<input type="hidden" name="memberIds[]">`); on chip dismiss, move user back to the filtered list; show "No users found" when filter matches zero users — make T024 tests pass
+- [X] T025 [US3] Extend `createProject` in `app/actions/projects.ts`: (1) extract `memberIds[]` array from FormData; (2) parse as UUIDs, filter out the creating admin's own `userId` and any UUID not found in the `users` table; (3) wrap the `projects` insert and all `project_members` inserts in a single `db.transaction(...)` call; (4) on commit, proceed to `revalidatePath`/`redirect` as before — make T023 tests pass
+- [X] T026 [US3] Extend `app/(shell)/projects/new/page.tsx`: after `requireAdmin()`, query all users where `id ≠ adminUserId` ordered by name; pass as `availableUsers: { id: string; name: string; email: string }[]` prop to `<CreateProjectForm>` — make T024 picker-render test pass
+- [X] T027 [US3] Implement member picker in `components/projects/create-project-form.tsx`: add `availableUsers` prop; render a search `<input>` that filters `availableUsers` in-memory by name and email (case-insensitive substring match); render filtered results as a clickable list; on click, move user to a `selectedUsers` state array and render as a dismissible chip (`name` visible, `id` as `<input type="hidden" name="memberIds[]">`); on chip dismiss, move user back to the filtered list; show "No users found" when filter matches zero users — make T024 tests pass
 
 **Checkpoint**: T023 and T024 tests pass. Admin can add members atomically during project creation.
 
@@ -121,10 +121,10 @@
 
 **Purpose**: Code quality gate, accessibility verification, and full end-to-end validation.
 
-- [ ] T028 [P] Verify keyboard focus order in `components/projects/create-project-form.tsx` matches the contract: Project Name → Project Key → Description → Color picker (arrow-key navigation within swatch group) → Start Date → End Date → Member Picker search input → Submit; add `tabIndex` adjustments or roving tabindex to the swatch group and member picker if needed
-- [ ] T029 [P] Run `npm run verify` — `biome check` must exit 0 across all modified files (`lib/db/schema/project-members.ts`, `app/actions/projects.ts`, `app/(shell)/projects/new/page.tsx`, `components/projects/create-project-form.tsx`); fix any lint or format violations
-- [ ] T030 Run full test suite: `npm test` — all tests in `tests/unit/projects/` and `tests/integration/projects/` must pass with 0 failures
-- [ ] T031 Run Quickstart Scenarios 1–8 from `specs/007-create-project/quickstart.md` manually; confirm all expected outcomes
+- [X] T028 [P] Verify keyboard focus order in `components/projects/create-project-form.tsx` matches the contract: Project Name → Project Key → Description → Color picker (arrow-key navigation within swatch group) → Start Date → End Date → Member Picker search input → Submit; add `tabIndex` adjustments or roving tabindex to the swatch group and member picker if needed
+- [X] T029 [P] Run `npm run verify` — `biome check` must exit 0 across all modified files (`lib/db/schema/project-members.ts`, `app/actions/projects.ts`, `app/(shell)/projects/new/page.tsx`, `components/projects/create-project-form.tsx`); fix any lint or format violations
+- [X] T030 Run full test suite: `npm test` — all tests in `tests/unit/projects/` and `tests/integration/projects/` must pass with 0 failures
+- [X] T031 Run Quickstart Scenarios 1–8 from `specs/007-create-project/quickstart.md` manually; confirm all expected outcomes
 
 ---
 

@@ -2,6 +2,7 @@ export * from "./audit";
 export * from "./auth";
 export * from "./notifications";
 export * from "./project-activity-entries";
+export * from "./project-members";
 export * from "./project-memberships";
 export * from "./projects";
 export * from "./rate-limit";

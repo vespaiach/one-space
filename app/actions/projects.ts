@@ -1,14 +1,16 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AuthorizationError, requireAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projectMembers, projects, users } from "@/lib/db/schema";
 import { validateProjectFields } from "@/lib/projects/validation";
 
 type CreateProjectResult = { error: "forbidden" } | { fieldErrors: Partial<Record<string, string>> } | null;
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function createProject(
   _prevState: CreateProjectResult,
@@ -33,6 +35,11 @@ export async function createProject(
   const startDate = String(formData.get("startDate") ?? "").trim();
   const endDate = String(formData.get("endDate") ?? "").trim() || undefined;
 
+  const rawMemberIds = formData.getAll("memberIds[]").map(String);
+  const candidateMemberIds = rawMemberIds
+    .filter((id) => UUID_REGEX.test(id))
+    .filter((id) => id !== admin.userId);
+
   const fieldErrors = validateProjectFields({ name, key, description, color, startDate, endDate });
 
   if (Object.keys(fieldErrors).length > 0) {
@@ -44,14 +51,31 @@ export async function createProject(
     return { fieldErrors: { key: "This key is already in use. Choose a different one." } };
   }
 
-  await db.insert(projects).values({
-    key,
-    name,
-    description,
-    color,
-    startDate,
-    endDate: endDate ?? null,
-    createdBy: admin.userId,
+  const validUsers =
+    candidateMemberIds.length > 0
+      ? await db.select({ id: users.id }).from(users).where(inArray(users.id, candidateMemberIds))
+      : [];
+  const validMemberIds = validUsers.map((u) => u.id);
+
+  await db.transaction(async (tx) => {
+    const [project] = await tx
+      .insert(projects)
+      .values({
+        key,
+        name,
+        description,
+        color,
+        startDate,
+        endDate: endDate ?? null,
+        createdBy: admin.userId,
+      })
+      .returning({ id: projects.id });
+
+    if (validMemberIds.length > 0) {
+      await tx
+        .insert(projectMembers)
+        .values(validMemberIds.map((userId) => ({ projectId: project.id, userId })));
+    }
   });
 
   revalidatePath("/projects");
