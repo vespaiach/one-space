@@ -33,7 +33,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       projects={PROJECTS}
       isAdmin={isAdmin}
       notificationCount={notifications.length}
-      memberCount={members.length}>
+      memberCount={members.length}
+      hideTopBarOn={["/projects/new"]}>
       {children}
     </Shell>
   );

@@ -1,6 +1,6 @@
 export default function SmallPlus({
-  width = 16,
-  height = 16,
+  width = 14,
+  height = 14,
   title = "Small Plus Icon",
 }: {
   width?: number;

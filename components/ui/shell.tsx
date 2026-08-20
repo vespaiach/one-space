@@ -11,6 +11,7 @@ import IconLogOut from "@/components/icons/logout";
 import IconSmallPlus from "@/components/icons/small-plus";
 import IconUsers from "@/components/icons/users";
 import { colors, layer, layout, motion, radius, space, structure, type } from "@/styles/tokens.stylex";
+import { IconLink } from "./button";
 
 const styles = stylex.create({
   root: {
@@ -169,20 +170,6 @@ const styles = stylex.create({
     letterSpacing: type.trackingWider,
     color: colors.mutedForeground,
     textTransform: "uppercase",
-  },
-
-  projectAddBtn: {
-    width: "20px",
-    height: "20px",
-    display: structure.flex,
-    alignItems: structure.alignCenter,
-    justifyContent: structure.alignCenter,
-    borderRadius: radius.xs,
-    color: colors.mutedForeground,
-    ":hover": {
-      backgroundColor: colors.accent,
-      color: colors.foreground,
-    },
   },
 
   projectItem: {
@@ -390,6 +377,8 @@ type ShellProps = {
   }>;
   notificationCount?: number;
   memberCount?: number;
+  showTopBar?: boolean;
+  hideTopBarOn?: string[];
 };
 
 export function Shell({
@@ -399,8 +388,11 @@ export function Shell({
   members = [],
   notificationCount = 0,
   memberCount = 0,
+  showTopBar = true,
+  hideTopBarOn = [],
 }: ShellProps) {
   const pathname = usePathname();
+  const topBarVisible = showTopBar && !hideTopBarOn.includes(pathname);
 
   return (
     <div {...stylex.props(styles.root)}>
@@ -438,12 +430,11 @@ export function Shell({
             <div {...stylex.props(styles.projectsHeader)}>
               <span {...stylex.props(styles.projectsLabel)}>Projects</span>
               {isAdmin && (
-                <Link
+                <IconLink
                   href="/projects/new"
-                  {...stylex.props(styles.projectAddBtn)}
                   aria-label="Add project">
                   <IconSmallPlus />
-                </Link>
+                </IconLink>
               )}
             </div>
             <ul>
@@ -516,28 +507,30 @@ export function Shell({
       </aside>
 
       <div {...stylex.props(styles.contentWrapper)}>
-        <header {...stylex.props(styles.topBar)}>
-          <div /> {/* page title slot — filled by page content */}
-          <div {...stylex.props(styles.topBarRight)}>
-            <div {...stylex.props(styles.memberAvatars)}>
-              {members.map((m, i) => (
-                <div
-                  key={m.initials}
-                  {...stylex.props(styles.memberAvatar, i === 0 && styles.memberAvatarFirst)}
-                  style={{ backgroundColor: m.bg }}
-                  title={m.initials}>
-                  {m.initials}
-                </div>
-              ))}
+        {topBarVisible && (
+          <header {...stylex.props(styles.topBar)}>
+            <div /> {/* page title slot — filled by page content */}
+            <div {...stylex.props(styles.topBarRight)}>
+              <div {...stylex.props(styles.memberAvatars)}>
+                {members.map((m, i) => (
+                  <div
+                    key={m.initials}
+                    {...stylex.props(styles.memberAvatar, i === 0 && styles.memberAvatarFirst)}
+                    style={{ backgroundColor: m.bg }}
+                    title={m.initials}>
+                    {m.initials}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                {...stylex.props(styles.addBtn)}
+                aria-label="Create new">
+                <IconSmallPlus />
+              </button>
             </div>
-            <button
-              type="button"
-              {...stylex.props(styles.addBtn)}
-              aria-label="Create new">
-              <IconSmallPlus />
-            </button>
-          </div>
-        </header>
+          </header>
+        )}
 
         <main {...stylex.props(styles.main)}>{children}</main>
       </div>
