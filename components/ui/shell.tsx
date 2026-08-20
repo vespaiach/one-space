@@ -438,12 +438,12 @@ export function Shell({
             <div {...stylex.props(styles.projectsHeader)}>
               <span {...stylex.props(styles.projectsLabel)}>Projects</span>
               {isAdmin && (
-                <button
-                  type="button"
+                <Link
+                  href="/projects/new"
                   {...stylex.props(styles.projectAddBtn)}
                   aria-label="Add project">
                   <IconSmallPlus />
-                </button>
+                </Link>
               )}
             </div>
             <ul>

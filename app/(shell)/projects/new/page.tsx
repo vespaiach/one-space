@@ -1,8 +1,34 @@
+import * as stylex from "@stylexjs/stylex";
 import { asc, ne } from "drizzle-orm";
 import { CreateProjectForm } from "@/components/projects/create-project-form";
 import { requireAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { colors, space, structure, type } from "@/styles/tokens.stylex";
+
+const styles = stylex.create({
+  page: {
+    paddingTop: space.s7,
+    paddingInline: space.s8,
+    paddingBottom: space.s11,
+  },
+  container: {
+    maxWidth: "620px",
+    marginInline: structure.auto,
+  },
+  heading: {
+    fontSize: type.sizeXl,
+    fontWeight: type.weightBold,
+    letterSpacing: "-0.025em",
+    color: colors.foreground,
+    margin: 0,
+  },
+  subtitle: {
+    fontSize: type.sizeSm,
+    color: colors.textSecondary,
+    marginBottom: "28px",
+  },
+});
 
 export default async function NewProjectPage() {
   const admin = await requireAdmin();
@@ -20,9 +46,12 @@ export default async function NewProjectPage() {
   }));
 
   return (
-    <main>
-      <h1>New Project</h1>
-      <CreateProjectForm availableUsers={pickerUsers} />
+    <main {...stylex.props(styles.page)}>
+      <div {...stylex.props(styles.container)}>
+        <h1 {...stylex.props(styles.heading)}>New project</h1>
+        <p {...stylex.props(styles.subtitle)}>Set up a project and add your team.</p>
+        <CreateProjectForm availableUsers={pickerUsers} />
+      </div>
     </main>
   );
 }

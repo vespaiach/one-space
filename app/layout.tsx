@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 import * as stylex from "@stylexjs/stylex";
+import { ToastContainer } from "@/components/ui/toasts";
 import { colors, font, type } from "@/styles/tokens.stylex";
 
 const styles = stylex.create({
@@ -15,7 +16,10 @@ const styles = stylex.create({
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body {...stylex.props(styles.body)}>{children}</body>
+      <body {...stylex.props(styles.body)}>
+        {children}
+        <ToastContainer />
+      </body>
     </html>
   );
 }

@@ -36,9 +36,14 @@ export const colors = stylex.defineVars({
   accentForeground: "oklch(0.2807 0.0263 58.99)",
 
   destructive: "oklch(0.5656 0.1608 34.09)", // #C2492E
+  destructiveBackground: "rgb(247, 236, 231)",
   destructiveForeground: "oklch(0.9671 0.0181 78.24)",
   success: "oklch(0.6050 0.0591 141.65)", // #6E8B6A
+  successBackground: "rgb(234, 243, 237)", // active bg wash
   warning: "oklch(0.6722 0.1132 72.89)", // #C08A3E
+  warningBackground: "rgb(246, 239, 221)",
+  info: "#3f6fa8",
+  infoBackground: "rgb(234, 240, 247)",
 
   border: "oklch(0.8930 0.0327 80.99)", // #E7DAC4
   borderSoft: "oklch(0.9310 0.0263 82.38)", // #F1E7D5 inner dividers
@@ -126,6 +131,12 @@ export const space = stylex.defineVars({
   s7: "1.5rem", // 24
   s8: "1.875rem", // 30
   s9: "2.25rem", // 36 auth card padding
+  s10: "2.5rem", // 40,
+  s11: "3rem", // 48
+  s12: "3.75rem", // 60
+  s13: "4.5rem", // 72
+  s14: "5.25rem", // 84
+  s15: "6rem", // 96
 });
 
 /* ---- Radius ------------------------------------------------------------ */
