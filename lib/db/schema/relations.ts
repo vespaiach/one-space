@@ -1,5 +1,8 @@
 import { relations } from "drizzle-orm";
 import { forcedResetAuthorizations, passwordResetTokens, sessions } from "./auth";
+import { issueLabels } from "./issue-labels";
+import { issues } from "./issues";
+import { labels } from "./labels";
 import { notifications } from "./notifications";
 import { projectActivityEntries } from "./project-activity-entries";
 import { projectMemberships } from "./project-memberships";
@@ -18,6 +21,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   actedNotifications: many(notifications, { relationName: "notificationActor" }),
   actedProjectActivityEntries: many(projectActivityEntries, { relationName: "activityActor" }),
   subjectProjectActivityEntries: many(projectActivityEntries, { relationName: "activitySubject" }),
+  createdIssues: many(issues, { relationName: "issueCreator" }),
+  assignedIssues: many(issues, { relationName: "issueAssignee" }),
+  createdLabels: many(labels, { relationName: "labelCreator" }),
 }));
 
 export const projectsRelations = relations(projects, ({ many, one }) => ({
@@ -29,6 +35,50 @@ export const projectsRelations = relations(projects, ({ many, one }) => ({
   memberships: many(projectMemberships),
   notifications: many(notifications),
   activityEntries: many(projectActivityEntries),
+  issues: many(issues),
+  labels: many(labels),
+}));
+
+export const issuesRelations = relations(issues, ({ many, one }) => ({
+  project: one(projects, {
+    fields: [issues.projectId],
+    references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [issues.createdBy],
+    references: [users.id],
+    relationName: "issueCreator",
+  }),
+  assignee: one(users, {
+    fields: [issues.assigneeId],
+    references: [users.id],
+    relationName: "issueAssignee",
+  }),
+  issueLabels: many(issueLabels),
+}));
+
+export const labelsRelations = relations(labels, ({ many, one }) => ({
+  project: one(projects, {
+    fields: [labels.projectId],
+    references: [projects.id],
+  }),
+  creator: one(users, {
+    fields: [labels.createdBy],
+    references: [users.id],
+    relationName: "labelCreator",
+  }),
+  issueLabels: many(issueLabels),
+}));
+
+export const issueLabelsRelations = relations(issueLabels, ({ one }) => ({
+  issue: one(issues, {
+    fields: [issueLabels.issueId],
+    references: [issues.id],
+  }),
+  label: one(labels, {
+    fields: [issueLabels.labelId],
+    references: [labels.id],
+  }),
 }));
 
 export const projectMembershipsRelations = relations(projectMemberships, ({ many, one }) => ({
