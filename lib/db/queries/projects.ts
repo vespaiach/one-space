@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
 import type { Database } from "@/lib/db";
-import { projectMemberships, projects } from "@/lib/db/schema";
+import { issues, projectMemberships, projects } from "@/lib/db/schema";
 
 export type AccessibleProject = {
   id: string;
@@ -31,6 +31,33 @@ export async function listProjectsForUser(database: Database, userId: string): P
     .where(and(eq(projectMemberships.userId, userId), isNull(projectMemberships.removedAt)))
     .orderBy(asc(projects.name), asc(projects.id));
   return rows.map(mapProjectAccess);
+}
+
+export type SidebarProject = {
+  key: string;
+  name: string;
+  color: string;
+  issueCount: number;
+};
+
+export async function listSidebarProjectsForUser(
+  database: Database,
+  userId: string,
+): Promise<SidebarProject[]> {
+  const rows = await database
+    .select({
+      key: projects.key,
+      name: projects.name,
+      color: projects.color,
+      issueCount: count(issues.id),
+    })
+    .from(projectMemberships)
+    .innerJoin(projects, eq(projectMemberships.projectId, projects.id))
+    .leftJoin(issues, eq(issues.projectId, projects.id))
+    .where(and(eq(projectMemberships.userId, userId), isNull(projectMemberships.removedAt)))
+    .groupBy(projects.id, projects.key, projects.name, projects.color)
+    .orderBy(asc(projects.name), asc(projects.id));
+  return rows.map((row) => ({ ...row, issueCount: Number(row.issueCount) }));
 }
 
 export async function getProjectAccessByKey(
