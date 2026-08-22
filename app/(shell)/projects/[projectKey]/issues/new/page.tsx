@@ -18,14 +18,13 @@ export default async function NewIssuePage({ params }: { params: Promise<{ proje
   ]);
 
   return (
-    <article>
-      <h1>New issue</h1>
-      <p>{project.name}</p>
-      <CreateIssueForm
-        projectKey={project.key}
-        members={members}
-        labels={labels}
-      />
-    </article>
+    <CreateIssueForm
+      projectKey={project.key}
+      projectName={project.name}
+      projectColor={project.color}
+      currentUserId={session.userId}
+      members={members}
+      labels={labels}
+    />
   );
 }

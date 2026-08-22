@@ -12,7 +12,9 @@ export type AccessibleProject = {
   canEdit: boolean;
 };
 
-function mapProjectAccess(row: Omit<AccessibleProject, "access" | "canEdit">): AccessibleProject {
+function mapProjectAccess<T extends { status: "active" | "archived" }>(
+  row: T,
+): T & { access: "member" | "read_only"; canEdit: boolean } {
   const canEdit = row.status === "active";
   return { ...row, access: canEdit ? "member" : "read_only", canEdit };
 }
@@ -60,11 +62,13 @@ export async function listSidebarProjectsForUser(
   return rows.map((row) => ({ ...row, issueCount: Number(row.issueCount) }));
 }
 
+export type ProjectDetails = AccessibleProject & { color: string };
+
 export async function getProjectAccessByKey(
   database: Database,
   userId: string,
   projectKey: string,
-): Promise<AccessibleProject | null> {
+): Promise<ProjectDetails | null> {
   const [row] = await database
     .select({
       id: projects.id,
@@ -72,6 +76,7 @@ export async function getProjectAccessByKey(
       name: projects.name,
       description: projects.description,
       status: projects.status,
+      color: projects.color,
     })
     .from(projectMemberships)
     .innerJoin(projects, eq(projectMemberships.projectId, projects.id))
