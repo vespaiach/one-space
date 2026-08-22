@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDatabase, truncateFeatureTables } from "@/tests/helpers/database";
-import { projectMembers, projects, users } from "@/lib/db/schema";
+import { projectMemberships, projects, users } from "@/lib/db/schema";
+import { getProjectAccessByKey, listProjectsForUser } from "@/lib/db/queries/projects";
 
 // --- Module mocks (hoisted before imports) ---
 
@@ -327,7 +328,7 @@ describe("createProject — member insertion (US3)", () => {
     mockGetCurrentSession.mockResolvedValue({ userId: admin.id, role: "admin", sessionId: "s" });
   });
 
-  it("inserts two project_members rows for two valid memberIds", async () => {
+  it("inserts a membership for the admin plus two valid memberIds", async () => {
     const member1 = await seedMember();
     const member2 = await seedSecondMember();
     mockRedirect.mockImplementation(() => {
@@ -349,14 +350,16 @@ describe("createProject — member insertion (US3)", () => {
     const [project] = await database.db.select().from(projects);
     const members = await database.db
       .select()
-      .from(projectMembers)
-      .where(eq(projectMembers.projectId, project.id));
-    expect(members).toHaveLength(2);
+      .from(projectMemberships)
+      .where(eq(projectMemberships.projectId, project.id));
+    expect(members).toHaveLength(3);
+    expect(members.map((m) => m.userId)).toContain(admin.id);
     expect(members.map((m) => m.userId)).toContain(member1.id);
     expect(members.map((m) => m.userId)).toContain(member2.id);
+    expect(members.every((m) => m.addedByUserId === admin.id)).toBe(true);
   });
 
-  it("inserts no project_members rows when no memberIds submitted", async () => {
+  it("inserts exactly one membership row (the admin) when no memberIds submitted", async () => {
     mockRedirect.mockImplementation(() => {
       throw new Error("NEXT_REDIRECT");
     });
@@ -374,12 +377,13 @@ describe("createProject — member insertion (US3)", () => {
     const [project] = await database.db.select().from(projects);
     const members = await database.db
       .select()
-      .from(projectMembers)
-      .where(eq(projectMembers.projectId, project.id));
-    expect(members).toHaveLength(0);
+      .from(projectMemberships)
+      .where(eq(projectMemberships.projectId, project.id));
+    expect(members).toHaveLength(1);
+    expect(members[0].userId).toBe(admin.id);
   });
 
-  it("silently drops admin's own UUID from memberIds", async () => {
+  it("dedupes admin's own UUID from memberIds instead of inserting it twice", async () => {
     const member = await seedMember();
     mockRedirect.mockImplementation(() => {
       throw new Error("NEXT_REDIRECT");
@@ -400,11 +404,11 @@ describe("createProject — member insertion (US3)", () => {
     const [project] = await database.db.select().from(projects);
     const members = await database.db
       .select()
-      .from(projectMembers)
-      .where(eq(projectMembers.projectId, project.id));
-    expect(members).toHaveLength(1);
-    expect(members[0].userId).toBe(member.id);
-    expect(members.map((m) => m.userId)).not.toContain(admin.id);
+      .from(projectMemberships)
+      .where(eq(projectMemberships.projectId, project.id));
+    expect(members).toHaveLength(2);
+    expect(members.map((m) => m.userId)).toContain(admin.id);
+    expect(members.map((m) => m.userId)).toContain(member.id);
   });
 
   it("silently drops non-existent UUID and inserts remaining valid member", async () => {
@@ -429,10 +433,11 @@ describe("createProject — member insertion (US3)", () => {
     const [project] = await database.db.select().from(projects);
     const members = await database.db
       .select()
-      .from(projectMembers)
-      .where(eq(projectMembers.projectId, project.id));
-    expect(members).toHaveLength(1);
-    expect(members[0].userId).toBe(member.id);
+      .from(projectMemberships)
+      .where(eq(projectMemberships.projectId, project.id));
+    expect(members).toHaveLength(2);
+    expect(members.map((m) => m.userId)).toContain(admin.id);
+    expect(members.map((m) => m.userId)).toContain(member.id);
   });
 
   it("rolls back the projects row when project_members insert fails", async () => {
@@ -464,5 +469,42 @@ describe("createProject — member insertion (US3)", () => {
 
     const projectRows = await realDb.select().from(projects);
     expect(projectRows).toHaveLength(0);
+  });
+});
+
+// --- Bug fix: owner-not-added-to-project ---
+
+describe("createProject — creator has immediate access (bug: owner-not-added-to-project)", () => {
+  beforeEach(async () => {
+    await truncateFeatureTables(database.client);
+    _actionDb = database.db;
+    mockGetCurrentSession.mockReset();
+    mockRevalidatePath.mockReset();
+    mockRedirect.mockReset();
+  });
+
+  it("makes the new project visible to the creating admin via getProjectAccessByKey and listProjectsForUser", async () => {
+    const admin = await seedAdmin();
+    mockGetCurrentSession.mockResolvedValue({ userId: admin.id, role: "admin", sessionId: "s" });
+    mockRedirect.mockImplementation(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+
+    const { createProject } = await import("@/app/actions/projects");
+    const formData = new FormData();
+    formData.set("name", "Owner Access Project");
+    formData.set("key", "OAP");
+    formData.set("description", "desc");
+    formData.set("color", "sky");
+    formData.set("startDate", "2026-09-01");
+
+    await expect(createProject(null, formData)).rejects.toThrow("NEXT_REDIRECT");
+
+    const access = await getProjectAccessByKey(database.db, admin.id, "OAP");
+    expect(access).not.toBeNull();
+    expect(access?.key).toBe("OAP");
+
+    const listed = await listProjectsForUser(database.db, admin.id);
+    expect(listed.map((p) => p.key)).toContain("OAP");
   });
 });

@@ -29,6 +29,13 @@
       "when": 1787232242872,
       "tag": "0003_late_major_mapleleaf",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787269921069,
+      "tag": "0004_keen_grandmaster",
+      "breakpoints": true
     }
   ]
 }

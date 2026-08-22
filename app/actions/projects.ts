@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AuthorizationError, requireAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { projectMembers, projects, users } from "@/lib/db/schema";
+import { projectMemberships, projects, users } from "@/lib/db/schema";
 import { validateProjectFields } from "@/lib/projects/validation";
 
 type CreateProjectResult = { error: "forbidden" } | { fieldErrors: Partial<Record<string, string>> } | null;
@@ -36,9 +36,7 @@ export async function createProject(
   const endDate = String(formData.get("endDate") ?? "").trim() || undefined;
 
   const rawMemberIds = formData.getAll("memberIds[]").map(String);
-  const candidateMemberIds = rawMemberIds
-    .filter((id) => UUID_REGEX.test(id))
-    .filter((id) => id !== admin.userId);
+  const candidateMemberIds = rawMemberIds.filter((id) => UUID_REGEX.test(id) && id !== admin.userId);
 
   const fieldErrors = validateProjectFields({ name, key, description, color, startDate, endDate });
 
@@ -71,11 +69,14 @@ export async function createProject(
       })
       .returning({ id: projects.id });
 
-    if (validMemberIds.length > 0) {
-      await tx
-        .insert(projectMembers)
-        .values(validMemberIds.map((userId) => ({ projectId: project.id, userId })));
-    }
+    await tx.insert(projectMemberships).values([
+      { projectId: project.id, userId: admin.userId, addedByUserId: admin.userId },
+      ...validMemberIds.map((userId) => ({
+        projectId: project.id,
+        userId,
+        addedByUserId: admin.userId,
+      })),
+    ]);
   });
 
   revalidatePath("/projects");

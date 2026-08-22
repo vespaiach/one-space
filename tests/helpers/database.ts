@@ -16,6 +16,6 @@ export function createTestDatabase(environment: NodeJS.ProcessEnv = process.env)
 export async function truncateFeatureTables(client: postgres.Sql): Promise<void> {
   readTestDatabaseUrl();
   await client.unsafe(
-    "TRUNCATE TABLE project_activity_entries, notifications, project_members, project_memberships, projects, audit_events, rate_limit_states, rate_limit_events, forced_reset_authorizations, password_reset_tokens, sessions, users RESTART IDENTITY CASCADE",
+    "TRUNCATE TABLE issue_labels, issues, labels, project_activity_entries, notifications, project_members, project_memberships, projects, audit_events, rate_limit_states, rate_limit_events, forced_reset_authorizations, password_reset_tokens, sessions, users RESTART IDENTITY CASCADE",
   );
 }

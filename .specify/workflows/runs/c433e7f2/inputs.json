@@ -1,0 +1,7 @@
+{
+  "inputs": {
+    "spec": "admin and member of a project can create new issues for that project. A new issue has: title; description (support basic markdown); status (column) pick from a list (default are backlog, in-progress, done); priority: urgent, high, medium, low, no priority; pick or create (inline) a label; pick an assignee or assign to me",
+    "integration": "claude",
+    "scope": "full"
+  }
+}
